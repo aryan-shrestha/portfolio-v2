@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Date | 2026-11-25 |
-| Version | 1.0 (draft for approval) |
+| Version | 1.1 (approved 2026-11-25 as 1.0; amended at the build finish, see Changelog) |
 | Owner | Aryan Shrestha |
 | Inspiration | https://www.sebg.ch/ (behaviour studied and measured; no code, art, or copy taken) |
 | Approved prototypes | `.superpowers/brainstorm/25275-1795541050/content/character-prototype-v10.html` (character), `scroll-tour-v12.html` (page choreography) |
@@ -110,7 +110,7 @@ The character sits in a fixed, full-window layer. Each section declares a **plac
 | 6 | **All work** — heading, "3 projects", grid of covers | `badge` | shrinks into a round badge bottom-left (circular clip, vermilion ring); cheers on entry | none |
 | 7 | **Contact** — dark (`ink`) section: "Got a project?", "I'm taking on new work.", big email `aryanshrestha274@gmail.com` (click to copy → "Copied! Talk soon."), footer: © 2026 Aryan Shrestha · LinkedIn · GitHub · Dress me up | `outro` (= hero) | grows back to hero size bottom-right; waves | attached bubble: "Got something to build? **Say hi.**" |
 
-**Phones: he never covers reading text.** [call] In the hero/outro on ≤ 900 px, the headline and sub-line sit at the **top** of the section and the character below them; the hero placement's height (`0.42·H`) is additionally capped so his silhouette top stays ≥ 12 px below the sub-line's bottom (measure the copy block on layout). In chapters he may overlap the lower edge of the browser frame (images, not text). Narration bubbles sit in the gap between frame and character (§6.3).
+**Phones: he never covers reading text.** [call] In the hero/outro on ≤ 900 px, the headline and sub-line sit at the **top** of the section and the character below them; the hero placement's height (`0.42·H`) is additionally capped so his silhouette top, and the greeting bubble just above it (allowance 72 px), stay ≥ 12 px below the sub-line's bottom (measure the copy block on layout). Where a centred placement leaves no room beside him for the "Play with me" button (§7.4), he steps left until he and the button are centred as a group (never closer than 16 px to the left edge), so it never sits over him. In chapters he may overlap the lower edge of the browser frame (images, not text). Narration bubbles sit in the gap between frame and character (§6.3).
 
 About text (draft, facts only): "I'm a full-stack developer based in Kathmandu. At CloudProAI I built frontends, APIs and data pipelines for client products. Now I take on freelance projects, from first sketch to a site that's live." [call — owner may edit]
 
@@ -120,7 +120,7 @@ Links: LinkedIn `https://www.linkedin.com/in/aryanshrestha274/`, GitHub `https:/
 
 | Placement | Desktop (> 900 px wide) | Phone/tablet (≤ 900 px) |
 |---|---|---|
-| `hero` / `outro` | `S = min(0.86·H / 4.25, 0.42·W / 5.2)`; right edge at `W − max(16, 0.03W)`; model y = −1.2 sits on the bottom edge | `S = min(0.42·H / 4.55, (W − 24) / 5.75)`; centred; model y = −1.5 on the bottom edge |
+| `hero` / `outro` | `S = min(0.86·H / (BOX.y1 + 1.2), 0.42·W / 5.2)`; right edge at `W − max(16, 0.03W)`; model y = −1.2 sits on the bottom edge | `S = min(0.42·H / (BOX.y1 + 1.5), (W − 24) / 6.35)` (BOX.y1 = 3.15, §7.6; 6.35 = widest measured pose, §7.5.2); centred, or stepped aside for the "Play with me" button (above); model y = −1.5 on the bottom edge |
 | `left` / `right` | `0.85 × hero S`, at the left/right margin | `0.62 × hero S`, at the left/right margin, **fully on screen** (sebg peeks off the edge on phones — deliberately not copied) [decided] |
 | `badge` | 160 px circle, 24 px from bottom-left; head centred | 112 px circle, 16 px from bottom-left |
 
@@ -194,11 +194,11 @@ type Look = {
   hair: 'wavy-fringe' | …;          // default: thick wavy near-black, volume on top, fringe swept to his right
   colors: { skin: '#efc6a2'; hair: '#3a2f28'; hoodie: '#55555c'; stubble: '#b98d6a' };
   facialHair: 'moustache-stubble';  // thin moustache + chin/jaw stubble
-  glasses: false;                   // tried and removed [decided]
+  glasses: false;                   // not part of Aryan's default look [decided]; a dress-up option (§7.6)
   outfit: 'hoodie' | 'blazer-bowtie' | 'hardhat' | 'detective';
 };
 ```
-Face: smiling, crinkled arc eyes (default); open dot eyes for surprise; closed-smile mouth / open mouth. Hoodie with collar ring, hood at the back, two drawstrings with tips.
+Face: smiling, crinkled arc eyes (default); open dot eyes for surprise; closed-smile mouth / open mouth. Eyes, brows, mouth and glasses sit on thin paper-coloured rims (≥ one dither cell at phone size) so they read on every skin swatch while the skin keeps its true tone. Hoodie with collar ring, hood at the back, two drawstrings with tips.
 
 ### 7.2 Rendering [decided]
 - Full-window `<canvas>`, `position: fixed; inset: 0; pointer-events: none`, above content.
@@ -213,7 +213,7 @@ Face: smiling, crinkled arc eyes (default); open dot eyes for surprise; closed-s
 |---|---|
 | Idle | breathing bob, slow head sway, blink every 2–5 s |
 | Look | head follows the cursor (yaw ±0.5 rad, pitch ±0.3); while sliding between placements, head turns toward travel direction |
-| Drag | invisible handle element tracks head+torso on screen (`touch-action: none`), mouse and touch; while carried: arms flail **upward**, open-eyed, tilt with velocity; on release: spring back to the placement (critically damped) |
+| Drag | invisible handle element tracks head+torso on screen (`touch-action: none`), mouse and touch; while carried: arms flail **upward**, open-eyed, tilt with velocity; on release: spring back to the placement (k = 60, c = 11, ζ ≈ 0.71: at most one small overshoot, the approved prototype's feel) |
 | Poke | tap/click without drag (< 6 px movement) → reaction + opens the action menu (§7.4) |
 | Speech bubble | attached bubble in hero/outro; positioned above-left of head, clamped on screen |
 | Mobile mode | when the window crosses 900 px: "Ooh, phone size." style quip [builder writes] |
@@ -230,26 +230,26 @@ All speech lines are **written fresh** in Aryan's voice; none are copied from se
 
 ### 7.5 Containment (no clipping) [decided — hard requirement]
 1. **Silhouette clamp every frame:** after the frame's final pose is applied, compute the exact silhouette bounds (`Box3.setFromObject(char, precise=true)`); if any part crosses the left, right, or top edge (padding = outline + 2 dither cells), shift him inward and zero that axis of the spring velocity. Skipped while he is the badge.
-2. **Sizing from measured poses:** widest measured silhouettes (model units): idle ±1.74, wave −3.04…+1.74, dance −2.78…+2.82, panic −2.82…+2.63, drag ±2.16. Phones size to total width 5.75; desktop sizes to ±2.6 and lets (1) nudge during wide moves.
+2. **Sizing from measured poses:** widest measured silhouettes (model units), prototype: idle ±1.74, wave −3.04…+1.74, dance −2.78…+2.82, panic −2.82…+2.63, drag ±2.16. Measured on the build at 60 fps from idle with the real damping and elbow fold, transients included, the widest totals are drag 6.21, cheer 6.20, panic 6.17. Phones size to total width **6.35** (that maximum + 0.1, rounded up to 0.05); desktop sizes to ±2.6 and lets (1) nudge during wide moves.
 3. **Natural arm raise:** while an arm swings through horizontal, the elbow folds (`1.6·sin|θ|`) so the hand never sweeps out wide; once the arm reaches its pose, the gesture's own elbow angle applies.
 4. Every new action must be measured and stay within these bounds, or the bounds/sizing are updated (enforced by tests, §10).
 
 ### 7.6 Dress-up page `/dress-up` [call]
-Large centred character (his own stage: placement `stage`, centred, `S` sized to fit the widest pose plus the tallest hat) with controls. "Reset" restores Aryan's look.
+Large centred character (his own stage: placement `stage`, centred, `S` sized to fit the widest pose plus the tallest hat; on narrow stages he steps aside for the "Play with me" button as in §6.1) with controls. "Reset" restores Aryan's look.
 
 **State model:** `look = { base, outfit }`.
 - `base` (visitor-editable, persisted per viewer in `localStorage`, try/catch, page works without it): hair style ∈ {wavy-fringe (Aryan), short-crop, curly-top, buzz}; hair colour ∈ 5 swatches {`#3a2f28` default, `#1a1a1a`, `#6b4a2b`, `#b8863b`, `#9aa0a6`}; skin ∈ 5 swatches {`#efc6a2` default, `#f7dcc4`, `#d9a47c`, `#a8724f`, `#6e4630`}; hoodie colour ∈ 6 swatches {`#55555c` default, `#2f4a6b`, `#6b2f3a`, `#3f5a3a`, `#c9c4b8`, `#1f1f22`}; glasses on/off.
 - `outfit` ∈ {hoodie, blazer-bowtie, hardhat, detective}: the visitor's pick applies everywhere **except inside project chapters**, where the chapter's outfit (§6.2) overlays the visitor's base (so a visitor's hair/skin/hoodie colour carries into chapters; the outfit swaps as designed).
-- Engine API: `setLook(base)` changes base traits; `setOutfit(id)` changes the overlay; chapter outfits call `setOutfit` with a "chapter" priority that is released on leaving the chapter.
+- Engine API: `setLook(base)` changes base traits; `setOutfit(id)` sets the visitor's outfit. It takes no priority argument: the engine derives the chapter outfit from the section in view (`data-outfit`) and overlays it inside chapters, releasing it on leaving.
 
-**Containment:** every hair × outfit combination is measured; `BOX.y1` (top bound, 3.05 in the prototype) becomes the maximum measured top (hats/curly-top raise it) and sizing uses that. The clip regression (§10) runs idle + 3 widest actions for every outfit and every hair style (not the full cross-product of colours: colours don't change bounds).
+**Containment:** every hair × outfit combination is measured; `BOX.y1` (top bound, 3.05 in the prototype) becomes the maximum measured top (hats/curly-top raise it) and sizing uses that: **3.15** (hard hat 3.14, curly-top 3.12, Aryan's own look 2.98). The clip regression (§10) runs idle + 3 widest actions for every outfit and every hair style (not the full cross-product of colours: colours don't change bounds).
 
 ### 7.7 Loading and fallback
 - The page renders and is readable without the character. The engine (Three.js + model) is a separate chunk, loaded after the page is interactive (`requestIdleCallback`, timeout 2 s).
 - No WebGL → static dithered PNG of him at the hero/outro placements, no interactions.
 
 ### 7.8 Reduced motion
-`prefers-reduced-motion: reduce` → no scroll choreography, no idle motion, no automatic gestures: a static dithered image in the hero and the badge; narration lines show as plain text blocks; actions available only when explicitly chosen from the menu, and play as a single still pose. [call]
+`prefers-reduced-motion: reduce` → no scroll choreography, no idle motion, no automatic gestures: a static dithered image in the hero and the badge (with WebGL: one canvas frame of the visitor's current look, redrawn only when it changes; without WebGL: `still.png`, §7.7); narration lines show as plain text blocks; actions available only when explicitly chosen from the menu, and play as a single still pose. [call]
 
 ---
 
@@ -281,7 +281,7 @@ Rules: strip EXIF from everything; `me.jpg` (owner photo) is **not** published. 
 
 - **Stack:** Next.js (latest stable, App Router, static generation for all routes), TypeScript (strict), Tailwind CSS v4, Three.js. Case studies as MDX with frontmatter validated by a Zod schema (missing/invalid field fails the build). Hosting: Vercel. [call]
 - **Engine API** (React ↔ engine): `mount(canvas, handleEl)`, `setPlacements(sections)`, `play(action)`, `gesture(name)`, `say(text, ms?)`, `setOutfit(id)`, `setLook(look)`, `destroy()`. React components register sections via `data-place`, `data-outfit`, `data-gesture` attributes.
-- **Performance budgets:** Lighthouse mobile Performance ≥ 90; LCP ≤ 2.5 s on simulated mid-tier mobile; initial JS (excluding the lazy engine chunk) ≤ 120 KB gz; engine chunk ≤ 220 KB gz; 60 fps idle on a mid-range laptop (render target is ≤ ~500×300 at PX 3).
+- **Performance budgets:** Lighthouse mobile Performance ≥ 90; LCP ≤ 2.5 s on simulated mid-tier mobile; initial JS (excluding the lazy engine chunk): app-owned ≤ 30 KB gz **and** total ≤ 160 KB gz (the Next 16 + React 19 framework floor alone is ~129–134 KB gz); engine chunk ≤ 220 KB gz; 60 fps idle on a mid-range laptop (render target is ≤ ~500×300 at PX 3).
 - **Tests:**
   - Vitest: placement maths (§6.1 formulas, transition window), containment function, narration activation band, Zod content schema.
   - Playwright (Chromium; WebGL via SwiftShader): (a) **clip regression** — 7 viewports (1920×1080, 1440×900, 1280×600, 1024×768, 768×1024, 390×844, 360×640) × {idle, every action, drag to each corner and off-screen, wide pose pinned to each edge}: no character pixels on the left/right/top edge; (b) **scroll tour** — 5 viewports × 31 scroll positions: no clipping, exactly one active narration line, correct placement per section; (c) no console errors; (d) reduced-motion and no-WebGL fallbacks render.
@@ -302,3 +302,23 @@ Rules: strip EXIF from everything; `me.jpg` (owner photo) is **not** published. 
 
 ## 13. Repository conventions
 ShipMint's `AGY-STANDARDS.md` does **not** apply: this is a personal project. [decided] Plain git repo; `main` as the default branch; work on feature branches; no handover documents required.
+
+---
+
+## Changelog — v1.1 (2026-11-25)
+
+Build rulings that changed spec text (ledger: `.superpowers/sdd/2026-11-25-portfolio/progress.md`). The sentences above are updated in place to match.
+
+| Ruling | Change | Section | Reason |
+|---|---|---|---|
+| R13 | Phone sizing width `WIDEST_TOTAL` 5.75 → **6.35** | §6.1, §7.5.2 | Measured transients (drag 6.21, cheer 6.20, panic 6.17) exceeded 5.75 and touched phone edges for 1–2 frames. |
+| (T11) | `BOX.y1` 3.05 → **3.15** | §6.1, §7.6 | The hard hat (3.14) is the tallest measured top over every hair × outfit × pose. |
+| R16 | Initial JS budget 120 KB gz → app-owned ≤ 30 KB gz **and** total ≤ 160 KB gz (engine ≤ 220 KB gz unchanged) | §10 | 120 KB is below the Next 16 + React 19 framework floor (~129–134 KB gz); the Lighthouse ≥ 90 and LCP ≤ 2.5 s gates stay and are met. |
+| N9 (T11) | `setOutfit(id)` has no priority argument | §7.6 | Chapters drive the chapter outfit internally from `data-outfit`; an external "chapter" call was overwritten every frame. |
+| R14 | Paper-coloured rims behind eyes, brows, mouth and glasses | §7.1 | Facial features vanished on the darkest skin swatch; rims keep them legible without lightening the skin. |
+| R17 | Reduced motion with WebGL: one canvas frame of the visitor's look; `still.png` only without WebGL | §7.8 | The visitor's pick applies everywhere (§7.6); a single frame is still "static". |
+| R12 | Drag spring k = 60, c = 11 (ζ ≈ 0.71), not critically damped | §7.3 | It is the owner-approved prototype feel; at most one small overshoot. |
+| (T11) | Glasses are a dress-up option, not part of Aryan's default look | §7.1 | "Tried and removed" read as "never available"; the default look stays without them. |
+| T13 | Phones: he steps aside so the "Play with me" button stands beside him | §6.1, §7.6 | A centred phone placement left no room, and the button sat over his sleeve. Made at the finish; for owner review. |
+| T13 | Phones: the hero cap also keeps the greeting bubble clear of the copy | §6.1 | At 320 × 568 the bubble covered the sub-line. Binds only below ~360 px wide. Made at the finish; for owner review. |
+
