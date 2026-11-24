@@ -24,16 +24,17 @@ export function CopyEmail({ email, onCopied }: Props) {
   }
 
   return (
-    <span className="inline-flex flex-col items-start gap-2">
+    // Both targets are at least 44 px tall (phones), so the rows sit close without gaps.
+    <span className="inline-flex flex-col items-start">
       <button
         type="button"
         onClick={copy}
-        className="display cursor-pointer text-[clamp(22px,3vw,44px)] text-left hover:text-accent focus-visible:text-accent"
+        className="display inline-flex min-h-11 cursor-pointer items-center text-[clamp(22px,3vw,44px)] text-left hover:text-accent focus-visible:text-accent"
       >
         {email}
       </button>
       <span className="flex items-center gap-3 font-mono text-sm">
-        <a href={`mailto:${email}`} className="underline underline-offset-4 hover:text-accent">
+        <a href={`mailto:${email}`} className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-accent">
           Open in mail app
         </a>
         <span role="status" aria-live="polite">

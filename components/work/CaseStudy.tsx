@@ -37,11 +37,15 @@ function Shot({ src, alt, priority }: { src: string; alt: string; priority?: boo
   )
 }
 
+/** Section heading with the project's highlight bar in front of it (every H2 on the page). */
 function H2({ id, children }: { id: string; children: ReactNode }) {
   return (
-    <h2 id={id} className="display text-[clamp(32px,4vw,64px)] font-extrabold">
-      {children}
-    </h2>
+    <div className="flex items-start gap-3">
+      <span aria-hidden="true" className="mt-2 h-2 w-8 shrink-0 rounded-full bg-(--hl)" />
+      <h2 id={id} className="display text-[clamp(32px,4vw,64px)] font-extrabold">
+        {children}
+      </h2>
+    </div>
   )
 }
 
@@ -70,7 +74,7 @@ export async function CaseStudy({ meta, source, next }: { meta: WorkMeta; source
         <div className={`px-(--m) pt-6 pb-[clamp(32px,7svh,72px)] ${gutter}`}>
           <Link
             href="/#work"
-            className="inline-block py-2 font-mono text-sm underline decoration-1 underline-offset-4 hover:decoration-2"
+            className="inline-flex min-h-11 items-center font-mono text-sm underline decoration-1 underline-offset-4 hover:decoration-2"
           >
             ← All work
           </Link>
@@ -100,7 +104,7 @@ export async function CaseStudy({ meta, source, next }: { meta: WorkMeta; source
               href={meta.liveUrl}
               target="_blank"
               rel="noopener"
-              className="py-2 font-medium underline decoration-2 underline-offset-4 hover:decoration-4"
+              className="inline-flex min-h-11 items-center font-medium underline decoration-2 underline-offset-4 hover:decoration-4"
             >
               Live link ↗
             </a>
@@ -117,18 +121,12 @@ export async function CaseStudy({ meta, source, next }: { meta: WorkMeta; source
 
         <div className="mt-[clamp(48px,10svh,112px)] grid max-w-[1100px] gap-[clamp(32px,6svh,64px)]">
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-10 gap-y-4 phone:grid-cols-1">
-            <div className="flex items-start gap-3">
-              <span aria-hidden="true" className="mt-2 h-2 w-8 shrink-0 rounded-full bg-(--hl)" />
-              <H2 id="problem">The problem</H2>
-            </div>
+            <H2 id="problem">The problem</H2>
             <p className="max-w-[60ch] text-[clamp(18px,1.6vw,22px)] leading-relaxed">{meta.problem}</p>
           </div>
 
           <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-x-10 gap-y-4 phone:grid-cols-1">
-            <div className="flex items-start gap-3">
-              <span aria-hidden="true" className="mt-2 h-2 w-8 shrink-0 rounded-full bg-(--hl)" />
-              <H2 id="built">What I built</H2>
-            </div>
+            <H2 id="built">What I built</H2>
             <div className="grid gap-6">
               <p className="max-w-[60ch] text-[clamp(18px,1.6vw,22px)] leading-relaxed">{meta.built}</p>
               {extra}

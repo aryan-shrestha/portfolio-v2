@@ -63,6 +63,10 @@ export function About() {
           ))}
         </p>
       </div>
+      {/* Without JavaScript nothing lights the words up: show them all. */}
+      <noscript>
+        <style>{'.about-word{opacity:1}'}</style>
+      </noscript>
     </section>
   )
 }

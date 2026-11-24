@@ -203,6 +203,7 @@ body {
   height: auto;
   pointer-events: none;
   transform-origin: 0 0;
+  image-rendering: pixelated; /* scaled by the engine: keep every dither dot hard-edged */
 }
 .char-still[hidden] {
   display: none;
