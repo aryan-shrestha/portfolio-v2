@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Bricolage_Grotesque, DM_Mono, Instrument_Sans } from 'next/font/google'
+import { CharacterLayer } from '@/components/character/CharacterLayer'
 import './globals.css'
 
 // Font pairing (spec 4.2, builder's call): Instrument Sans body + DM Mono mono.
@@ -22,7 +23,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <CharacterLayer />
+      </body>
     </html>
   )
 }

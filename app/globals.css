@@ -150,3 +150,71 @@ body {
     padding-bottom: 12svh;
   }
 }
+
+/* ---------- Character layer (spec §7.2; components/character/CharacterLayer, engine/runtime) ---------- */
+.char-canvas {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 30;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+.char-handle {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 31;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 40% 40% 12% 12%;
+}
+.char-badge {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 29;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent);
+  pointer-events: none;
+  opacity: 0;
+}
+/* Attached bubble: its bottom-right corner sits on the anchor above-left of his head. */
+.char-bubble {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 32;
+  /* sized by its text, not by the room left of its anchor (fixed + left would shrink-wrap it) */
+  width: max-content;
+  max-width: min(24ch, calc(100vw - 16px));
+  text-wrap: pretty;
+  padding: 12px 16px;
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.3);
+  font-family: var(--font-bricolage), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(16px, 1.5vw, 22px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  pointer-events: none;
+  transform: translate(-100%, -100%);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.char-bubble b {
+  color: #c43a22; /* AA on white (R9); the accent token stays #e2462c */
+}
+body.char-dragging,
+body.char-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
