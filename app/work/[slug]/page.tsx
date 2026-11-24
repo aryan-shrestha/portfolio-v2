@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { CaseStudy } from '@/components/work/CaseStudy'
 import { getAllWork, getWork } from '@/lib/content'
+import { ogImage } from '@/lib/siteUrl'
 
 export const dynamicParams = false
 
@@ -14,7 +15,12 @@ export async function generateMetadata({ params }: PageProps<'/work/[slug]'>): P
   const all = await getAllWork()
   const meta = all.find((w) => w.slug === slug)
   if (!meta) return {}
-  return { title: `${meta.title} — Aryan Shrestha`, description: meta.problem }
+  return {
+    title: meta.title,
+    description: meta.problem,
+    alternates: { canonical: `/work/${slug}` },
+    openGraph: { title: `${meta.title} — Aryan Shrestha`, description: meta.problem, url: `/work/${slug}`, images: [ogImage] },
+  }
 }
 
 export default async function WorkPage({ params }: PageProps<'/work/[slug]'>) {

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "images": "node scripts/build-images.mjs",
-    "still": "node scripts/render-still.mjs"
+    "still": "node scripts/render-still.mjs",
+    "og": "node scripts/render-og.mjs"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",

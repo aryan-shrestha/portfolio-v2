@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { DressUp } from '@/components/dressup/DressUp'
 
 export const metadata: Metadata = {
-  title: 'Page not found — Aryan Shrestha',
+  title: 'Page not found',
 }
 
 /** Unknown routes (HTTP 404) get the dress-up page under its own heading (spec §5). */

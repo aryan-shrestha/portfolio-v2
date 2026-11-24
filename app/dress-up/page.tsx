@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { DressUp } from '@/components/dressup/DressUp'
 
 export const metadata: Metadata = {
-  title: 'Dress me up — Aryan Shrestha',
+  title: 'Dress me up',
   description: 'Change his hair, colours and outfit. The look follows you around the site.',
 }
 
