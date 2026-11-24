@@ -385,10 +385,11 @@ export function createEngine(): EngineAPI {
 
   /**
    * Still mode (spec §7.7–7.8): reduced motion, or no WebGL. No scroll choreography and no idle motion:
-   * he is still.png at the hero and outro, the badge in All work and on case pages, and absent from About
-   * and the chapters (nothing over reading text); the section in view swaps him, never a glide. An action
-   * chosen from the menu (WebGL only) is one canvas frame of its key pose, held for its duration; the
-   * dress-up stage is one canvas frame of him in the visitor's look. Work is redone only on a change.
+   * he stands at the hero and outro, is the badge in All work and on case pages, stands on the dress-up
+   * stage, and is absent from About and the chapters (nothing over reading text); the section in view
+   * swaps him, never a glide. With WebGL (reduced motion) he is one canvas frame in the visitor's own look
+   * (ruling R17, spec §7.6), redrawn only on a change; an action chosen from the menu is one frame of its
+   * key pose, held for its duration. Without WebGL he is still.png (Aryan's own look), with no interactions.
    */
   function tickStill(now: number, dt: number) {
     const r = rig!
@@ -400,7 +401,7 @@ export function createEngine(): EngineAPI {
       actionT += dt
       if (!gl || !shown || action === 'idle' || action === 'drag' || actionT > DURATION[action]) action = null
     }
-    const frame = gl && shown && (action !== null || kind === 'stage')
+    const frame = gl && shown
     view = !shown ? 'hidden' : frame ? 'frame' : 'image'
     const p = frame ? P[kind] : imagePlacement(kind)
     const worn = wornOutfit()

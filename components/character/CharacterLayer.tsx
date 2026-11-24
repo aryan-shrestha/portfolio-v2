@@ -40,8 +40,8 @@ function badgeSection(): HTMLElement {
 /**
  * The character layer (spec §5, §7.2, §7.7): rendered once in the root layout so it persists across
  * routes. Everything about him but these few elements (engine, three.js, model, menu, lines) is one
- * dynamic import, made only after the page is idle. Under reduced motion or without WebGL the engine
- * shows him as the still image (StillFallback) instead of the live canvas (spec §7.7–7.8).
+ * dynamic import, made only after the page is idle. Under reduced motion the engine draws him as one
+ * still frame; without WebGL it shows the still image (StillFallback) (spec §7.7–7.8, ruling R17).
  */
 export function CharacterLayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -139,7 +139,7 @@ export function CharacterLayer() {
       (el) => el.getClientRects().length > 0,
     )
     const slug = sections.find((el) => el.dataset.caseComment)?.dataset.caseComment
-    // The still image (reduced motion, no WebGL) has no entrance: straight to the badge, clear of the text.
+    // Still mode (reduced motion, no WebGL) has no entrance: straight to the badge, clear of the text.
     if (slug && (!webgl || reducedMotion())) {
       engine.setSections([badgeSection()])
       return

@@ -1,9 +1,10 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import sharp from 'sharp'
 
 /**
  * Fallbacks (spec §7.3, §7.7, §7.8): reduced motion, no WebGL, the returning visitor and the
- * 900 px crossing. `view` says how he is shown now: 'live' (animated canvas), 'image' (still.png),
- * 'frame' (one still canvas frame: a chosen action, or the dress-up stage) or 'hidden'.
+ * 900 px crossing. `view` says how he is shown now: 'live' (animated canvas), 'frame' (reduced motion:
+ * one still canvas frame in the visitor's look, ruling R17), 'image' (still.png: no WebGL) or 'hidden'.
  */
 type Debug = {
   minX: number
@@ -13,7 +14,7 @@ type Debug = {
   action: string | null
   view: 'live' | 'image' | 'frame' | 'hidden'
 }
-type EngineWindow = Window & { __engine?: { debugState(): Debug; play(a: string): void } }
+type EngineWindow = Window & { __engine?: { debugState(): Debug & { outfit: string }; play(a: string): void } }
 
 function trackErrors(page: Page) {
   const errors: string[] = []
@@ -45,16 +46,47 @@ async function expectStillShown(img: Locator) {
   await expect(img).toHaveAttribute('src', /\/character\/still\.png$/)
   await expect.poll(() => img.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBe(600)
 }
+const HIDE_PAGE =
+  'html, body { background: #808080 !important; } body > *:not([data-char="canvas"]):not([data-char="still"]) { visibility: hidden !important; }'
+/** A screenshot of him alone: the page hidden on mid-grey, only the canvas and the still image left. */
+async function himOnly(page: Page) {
+  const toggle = (on: boolean) =>
+    page.evaluate(
+      ([on, css]) => {
+        if (!on) return document.getElementById('him-only')?.remove()
+        const st = document.createElement('style')
+        st.id = 'him-only'
+        st.textContent = css
+        document.head.append(st)
+      },
+      [on, HIDE_PAGE] as const,
+    )
+  await toggle(true)
+  const png = await page.screenshot({ animations: 'allow' })
+  await toggle(false)
+  return png
+}
+/** Pixels of him (pure white or ink dots) in a him-only screenshot. */
+async function hisPixels(png: Buffer) {
+  const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true })
+  let n = 0
+  for (let i = 0; i < data.length; i += info.channels) {
+    const [r, g, b] = [data[i], data[i + 1], data[i + 2]]
+    if ((r >= 250 && g >= 250 && b >= 250) || (r < 30 && g < 30 && b < 30)) n++
+  }
+  return n
+}
+/** Reduced motion with WebGL (R17): he is one canvas frame, drawn, and the still image stays unused. */
+async function expectFrame(page: Page) {
+  await expect.poll(async () => (await debug(page)).view).toBe('frame')
+  await expect(still(page)).toBeHidden()
+  expect(await hisPixels(await himOnly(page)), 'he is drawn on the canvas').toBeGreaterThan(1500)
+}
 /** Two screenshots of him alone (the page hidden), `ms` apart, are identical: nothing of him moves. */
 async function staysStill(page: Page, ms = 600) {
-  await page.addStyleTag({
-    content:
-      'html, body { background: #808080 !important; } body > *:not([data-char="canvas"]):not([data-char="still"]) { visibility: hidden !important; }',
-  })
-  const a = await page.screenshot({ animations: 'allow' })
+  const a = await himOnly(page)
   await page.waitForTimeout(ms)
-  const b = await page.screenshot({ animations: 'allow' })
-  await page.evaluate(() => document.head.lastElementChild?.remove())
+  const b = await himOnly(page)
   expect(Buffer.compare(a, b), 'he changed between the two shots: something moved').toBe(0)
 }
 const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
@@ -69,18 +101,19 @@ test.describe('reduced motion', () => {
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
   ])
-    test(`${vp.width}×${vp.height}: still.png in the hero and as the badge; scrolling never moves him`, async ({ page }) => {
+    test(`${vp.width}×${vp.height}: one still frame in the hero and as the badge; scrolling never moves him`, async ({
+      page,
+    }) => {
       const errors = trackErrors(page)
       await page.setViewportSize(vp)
       await page.goto('/')
       await engineReady(page)
       const img = still(page)
-      await expectStillShown(img)
-      expect((await debug(page)).view).toBe('image')
+      await expectFrame(page)
       // he greets from the hero, as a plain bubble
       await expect(page.locator('[data-char="bubble"]')).toHaveText(/Hi, I'm Aryan/)
-      const at0 = (await img.boundingBox())!
-      // the still stands where the hero placement puts him, clear of the hero copy
+      const at0 = await himOnly(page)
+      // he stands where the hero placement puts him, clear of the hero copy
       const copy = (await page.locator('section[data-place="hero"] [data-copy]').boundingBox())!
       const d = await debug(page)
       expect(d.minX).toBeGreaterThanOrEqual(0)
@@ -90,45 +123,45 @@ test.describe('reduced motion', () => {
       // scrolling inside the hero: no choreography, he does not move
       await page.evaluate(() => window.scrollTo(0, Math.round(innerHeight * 0.3)))
       await frames(page)
-      expect(await img.boundingBox()).toEqual(at0)
+      expect(Buffer.compare(await himOnly(page), at0), 'scrolling moved him').toBe(0)
       await staysStill(page, 300)
 
-      // About and the chapters: no still over the reading text
+      // About and the chapters: nothing of him over the reading text
       for (const i of [1, 2, 3, 4]) {
         await scrollToSection(page, i)
         await expect.poll(async () => (await debug(page)).view).toBe('hidden')
         await expect(img).toBeHidden()
+        expect(await hisPixels(await himOnly(page)), 'nothing drawn').toBe(0)
         await expect(page.locator('[data-char="bubble"]')).toHaveCSS('opacity', '0')
       }
       // narration reads as text
       await expect(page.locator('main > section').nth(2).locator('.line .bubble').first()).toBeVisible()
 
-      // All work: the badge, with still.png inside its circle
+      // All work: the badge, one frame clipped inside its circle
       await scrollToSection(page, 5)
       await expect.poll(async () => (await debug(page)).placement).toBe('badge')
-      await expectStillShown(img)
+      await expectFrame(page)
       const badge = (await page.locator('[data-char="badge"]').boundingBox())!
       expect(badge.width).toBe(vp.width > 900 ? 160 : 112)
       expect(await page.locator('[data-char="badge"]').evaluate((b) => getComputedStyle(b).opacity)).toBe('1')
-      expect(await img.evaluate((i) => getComputedStyle(i).clipPath)).toMatch(/^circle/)
       // no "Play with me" at the badge (a poke on the badge opens the menu)
       await expect(page.getByRole('button', { name: 'Play with me' })).toBeHidden()
 
       // Contact: the outro still
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
       await expect.poll(async () => (await debug(page)).placement).toBe('outro')
-      await expectStillShown(img)
-      expect(await img.evaluate((i) => getComputedStyle(i).clipPath)).toBe('none')
+      await expectFrame(page)
       expect((await debug(page)).action).toBeNull() // no automatic wave on arrival
       expect(errors()).toEqual([])
     })
 
-  test('a chosen action shows as one held still pose, then the still image returns', async ({ page }) => {
+  test('a chosen action shows as one held still pose, then he stands still again', async ({ page }) => {
     const errors = trackErrors(page)
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
     await engineReady(page)
-    await expectStillShown(still(page))
+    await expectFrame(page)
+    const idle = await himOnly(page)
     // narration gestures never play by themselves
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('narration:line', { detail: { gesture: 'point' } })))
     await frames(page)
@@ -136,14 +169,14 @@ test.describe('reduced motion', () => {
 
     await page.getByRole('button', { name: 'Play with me' }).click()
     await page.getByRole('menuitem', { name: 'Dance' }).click()
-    await expect.poll(async () => (await debug(page)).view).toBe('frame')
-    expect((await debug(page)).action).toBe('dance')
-    await expect(still(page)).toBeHidden()
+    await expect.poll(async () => (await debug(page)).action).toBe('dance')
+    await expectFrame(page)
     await expect(page.locator('[data-char="bubble"]')).toHaveText('Tests passed. Dance break.')
+    expect(Buffer.compare(await himOnly(page), idle), 'the dance pose is drawn').not.toBe(0)
     await staysStill(page, 500) // one pose, not an animation
-    // after the action's duration (4 s) the still image is back
-    await expect.poll(async () => (await debug(page)).view, { timeout: 6000 }).toBe('image')
-    await expectStillShown(still(page))
+    // after the action's duration (4 s) he stands as before
+    await expect.poll(async () => (await debug(page)).action, { timeout: 15_000 }).toBeNull()
+    await expectFrame(page)
     expect(errors()).toEqual([])
   })
 
@@ -151,7 +184,7 @@ test.describe('reduced motion', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/')
     await engineReady(page)
-    await expectStillShown(still(page))
+    await expectFrame(page)
     const before = await debug(page)
     const box = (await page.locator('[data-char="handle"]').boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -160,7 +193,7 @@ test.describe('reduced motion', () => {
     await frames(page)
     const during = await debug(page)
     expect(during.minX).toBe(before.minX)
-    expect(during.view).toBe('image')
+    expect(during.view).toBe('frame')
     await page.mouse.up()
   })
 
@@ -170,7 +203,7 @@ test.describe('reduced motion', () => {
     await page.goto('/work/bevlytics')
     await engineReady(page)
     await expect.poll(async () => (await debug(page)).placement).toBe('badge')
-    await expectStillShown(still(page))
+    await expectFrame(page)
     const badge = (await page.locator('[data-char="badge"]').boundingBox())!
     for (const el of await page.locator('main :is(h1, h2, p, li, a)').all()) {
       if (!(await el.isVisible())) continue
@@ -184,7 +217,7 @@ test.describe('reduced motion', () => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await page.goto('/dress-up')
     await engineReady(page)
-    await expect.poll(async () => (await debug(page)).view).toBe('frame')
+    await expectFrame(page)
     expect((await debug(page)).placement).toBe('stage')
     const panel = (await page.getByRole('region', { name: 'Pick a look' }).boundingBox())!
     expect((await debug(page)).maxX).toBeLessThanOrEqual(panel.x)
@@ -193,6 +226,24 @@ test.describe('reduced motion', () => {
     await page.getByRole('button', { name: 'Hard hat', exact: true }).click()
     await frames(page)
     await staysStill(page, 300)
+  })
+
+  // R17 / spec §7.6: the visitor's pick applies everywhere, reduced motion included.
+  test("the visitor's look is what he wears in the still frame (hard hat from the dress-up page)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/')
+    await engineReady(page)
+    await expectFrame(page)
+    expect((await debug(page)).outfit).toBe('hoodie')
+    const own = await himOnly(page)
+    await page.goto('/dress-up')
+    await engineReady(page)
+    await page.getByRole('button', { name: 'Hard hat', exact: true }).click()
+    await page.goto('/')
+    await engineReady(page)
+    await expect.poll(async () => (await debug(page)).outfit).toBe('hardhat')
+    await expectFrame(page)
+    expect(Buffer.compare(await himOnly(page), own), 'the hard-hat look is drawn, not the default').not.toBe(0)
   })
 
   // T5 follow-up: on desktop the browser frame stays pinned in view while lines 2–3 swap its screen.

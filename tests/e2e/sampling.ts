@@ -26,7 +26,7 @@ type Debug = {
   edge: [number, number, number]
 }
 type SamplerWindow = Window & {
-  __engine?: { debugState(): Debug; debugProbe(on: boolean): void }
+  __engine?: { debugState(): Debug; debugProbe(on: boolean): void; play(a: string): void }
   __samples?: Sample[]
   __sampling?: boolean
 }
@@ -54,8 +54,31 @@ export const stopSampling = (page: Page) =>
   page.evaluate(() => {
     const w = window as SamplerWindow
     w.__sampling = false
+    w.__engine!.debugProbe(false)
     return w.__samples!
   })
+
+/**
+ * Plays `action` and samples every frame until he is back to idle: by the engine's own clock (its time
+ * step is capped, so on slow software GL an action takes longer than its duration), not a wall-clock
+ * window. Asserts the action really played and really ended, so a no-op can't pass on idle frames.
+ */
+export async function playSampled(page: Page, action: string, timeout = 60_000): Promise<Sample[]> {
+  await startSampling(page)
+  await page.evaluate((a) => (window as SamplerWindow).__engine!.play(a), action)
+  await page.waitForFunction(
+    () => {
+      const s = (window as SamplerWindow).__samples!
+      return s.some((x) => x[6] !== null) && s.length > 1 && s[s.length - 1][6] === null
+    },
+    null,
+    { timeout },
+  )
+  const samples = await stopSampling(page)
+  expect(samples.some((x) => x[6] === action), `${action}: frames where it plays`).toBe(true)
+  expect(samples.at(-1)![6], `${action}: the last frame is idle again`).toBeNull()
+  return samples
+}
 
 /**
  * Every sampled frame keeps him off the left, right and top edge (spec §7.5): the silhouette inside

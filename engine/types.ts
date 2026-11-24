@@ -51,9 +51,9 @@ export type DebugState = {
   /** geometries alive on the GPU (leak check across look changes) */
   geometries: number
   /**
-   * How he is shown (spec §7.7–7.8): 'live' (the animated canvas), 'image' (still.png: reduced motion
-   * or no WebGL), 'frame' (one still canvas frame: an action chosen under reduced motion, or the
-   * dress-up stage), 'hidden' (reduced motion in About and the chapters).
+   * How he is shown (spec §7.7–7.8): 'live' (the animated canvas), 'frame' (reduced motion: one still
+   * canvas frame in the visitor's look, or of a chosen action's key pose; ruling R17), 'image' (still.png:
+   * no WebGL), 'hidden' (still mode in About and the chapters).
    */
   view: 'live' | 'image' | 'frame' | 'hidden'
   /**
@@ -82,7 +82,7 @@ export type PlaceInfo = {
 export interface EngineAPI {
   /**
    * Starts him in these elements. Returns false without WebGL (spec §7.7): he is then the still image
-   * at the hero, outro, badge and stage placements, with no interactions.
+   * (still.png) at the hero, outro, badge and stage placements, with no interactions.
    */
   mount(
     canvas: HTMLCanvasElement,
