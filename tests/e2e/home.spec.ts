@@ -5,26 +5,12 @@ const PLACES = ['hero', 'left', 'left', 'right', 'left', 'badge', 'outro']
 const TITLES = ['Napa Valley Weddings', 'Bevlytics', 'Data to Insights']
 const strip = (html: string) => html.replace(/<[^>]+>/g, '')
 
-// TODO(Task 6): delete this allowance once /work/[slug] exists. Until then Next prefetches
-// those routes from the home page's links and the browser logs one 404 per prefetch.
-const PENDING_ROUTE = /\/work\/(napa-valley-weddings|bevlytics|data-to-insights)\?_rsc=/
-const NOT_FOUND = 'Failed to load resource: the server responded with a status of 404 (Not Found)'
-
-/** Console errors and page errors, minus one 404 line per prefetch of a pending route. */
+/** Console errors and page errors. */
 function trackErrors(page: Page) {
-  const raw: string[] = []
-  let pending404 = 0
-  page.on('console', (m) => m.type() === 'error' && raw.push(m.text()))
-  page.on('pageerror', (e) => raw.push(e.message))
-  page.on('response', (r) => r.status() === 404 && PENDING_ROUTE.test(r.url()) && pending404++)
-  return () => {
-    const out = [...raw]
-    for (let n = 0; n < pending404; n++) {
-      const i = out.indexOf(NOT_FOUND)
-      if (i !== -1) out.splice(i, 1)
-    }
-    return out
-  }
+  const errors: string[] = []
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+  page.on('pageerror', (e) => errors.push(e.message))
+  return () => errors
 }
 
 /** Wait two frames so the rAF-driven scroll handlers have run. */
