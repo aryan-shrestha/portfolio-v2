@@ -3,3 +3,17 @@ me.jpg
 node_modules/
 .next/
 .DS_Store
+test-results/
+playwright-report/
+.claude/
+.impeccable/
+skills-lock.json
+
+# next.js
+/out/
+*.tsbuildinfo
+next-env.d.ts
+.env*
+.vercel
+*.pem
+npm-debug.log*
