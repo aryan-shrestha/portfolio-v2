@@ -28,7 +28,10 @@ describe('CopyEmail', () => {
     await user.click(screen.getByRole('button', { name: new RegExp(site.email) }))
 
     expect(writeText).toHaveBeenCalledWith(site.email)
-    expect(await screen.findByText('Copied! Talk soon.')).toBeTruthy()
+    const status = await screen.findByRole('status')
+    expect(status.textContent).toBe('Copied! Talk soon.')
+    const link = screen.getByRole('link')
+    expect(status.contains(link)).toBe(false)
     expect(onCopied).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('link').getAttribute('href')).toBe(mailto)
   })
