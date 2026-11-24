@@ -2,11 +2,11 @@ import { Box3, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOOK } from '@/engine/look'
 import { simulate } from '@/engine/measure'
-import { BOX } from '@/engine/placement'
+import { BOX, WIDEST_TOTAL } from '@/engine/placement'
 import { silhouette } from '@/engine/silhouette'
 import { buildCharacter } from '@/engine/model/build'
 import { applyPose } from '@/engine/pose-rig'
-import { DURATION, hasPose, poseFor, type Pose, type PoseCtx, type PoseKind } from '@/engine/poses'
+import { DURATION, KEY_T, hasPose, poseFor, type Pose, type PoseCtx, type PoseKind } from '@/engine/poses'
 import { CASE_COMMENTS, QUIPS, REACTIONS } from '@/engine/quips'
 import type { Action, Gesture } from '@/engine/types'
 
@@ -246,5 +246,20 @@ describe('quips', () => {
   it('has one comment per case study', () => {
     expect(Object.keys(CASE_COMMENTS).sort()).toEqual(['bevlytics', 'data-to-insights', 'napa-valley-weddings'])
     expect(CASE_COMMENTS.bevlytics).toBe('The data had opinions.')
+  })
+})
+
+describe('reduced motion: one still pose per action (spec §7.8)', () => {
+  it.each(ACTIONS)('%s: its key moment lies inside the action, he is visible, no flash, and fits WIDEST_TOTAL wide', (a) => {
+    expect(KEY_T[a]).toBeGreaterThan(0)
+    expect(KEY_T[a]).toBeLessThan(DURATION[a])
+    const p = poseFor(a, KEY_T[a], ctx)
+    expect(p.visible ?? 1).toBeGreaterThanOrEqual(0.4)
+    expect(p.flash ?? 0).toBe(0)
+    const rig = buildCharacter(DEFAULT_LOOK)
+    applyPose(rig, p, Infinity) // held: snapped straight to the pose, no swing
+    const box = silhouette(rig.root, new Box3())
+    expect(box.max.x - box.min.x).toBeLessThanOrEqual(WIDEST_TOTAL)
+    rig.dispose() // (height: fly rises past BOX.y1 by design; the runtime's top clamp holds him in)
   })
 })

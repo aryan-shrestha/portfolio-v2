@@ -50,6 +50,18 @@ export type DebugState = {
   action: Action | Gesture | null
   /** geometries alive on the GPU (leak check across look changes) */
   geometries: number
+  /**
+   * How he is shown (spec §7.7–7.8): 'live' (the animated canvas), 'image' (still.png: reduced motion
+   * or no WebGL), 'frame' (one still canvas frame: an action chosen under reduced motion, or the
+   * dress-up stage), 'hidden' (reduced motion in About and the chapters).
+   */
+  view: 'live' | 'image' | 'frame' | 'hidden'
+  /**
+   * With debugProbe on: opaque dots of the last drawn canvas frame in the leftmost column, the column
+   * holding the window's last pixel, and the top row. [0, 0, 0] otherwise (and on camera-flash frames,
+   * which light the whole window on purpose).
+   */
+  edge: [number, number, number]
 }
 
 /** Where he rests now (CSS px from the window's left edge): the idle silhouette, or the badge circle. */
@@ -63,14 +75,28 @@ export type PlaceInfo = {
   area: [number, number]
   W: number
   H: number
+  /** false while he is not drawn (reduced motion in About and the chapters): nothing to sit beside */
+  shown: boolean
 }
 
 export interface EngineAPI {
-  mount(canvas: HTMLCanvasElement, handle: HTMLElement, bubble: HTMLElement, badge: HTMLElement): void
+  /**
+   * Starts him in these elements. Returns false without WebGL (spec §7.7): he is then the still image
+   * at the hero, outro, badge and stage placements, with no interactions.
+   */
+  mount(
+    canvas: HTMLCanvasElement,
+    handle: HTMLElement,
+    bubble: HTMLElement,
+    badge: HTMLElement,
+    still: HTMLImageElement,
+  ): boolean
   /** Re-read on every route change. Each element's `data-place` (and `data-outfit`, `data-gesture`) is read now. */
   setSections(els: HTMLElement[]): void
   play(action: Action): void
   gesture(g: Gesture): void
+  /** The hero greeting (may contain <b>): the first-visit line, or the returning visitor's (spec §7.3). */
+  setGreeting(html: string): void
   /** Show `text` (may contain <b>) for `ms`; an empty string clears it. */
   say(text: string, ms?: number): void
   /** The visitor's base traits (hair, colours, glasses): rebuilds the model, keeping his pose. */
@@ -87,5 +113,13 @@ export interface EngineAPI {
   onPlace(cb: (p: PlaceInfo) => void): () => void
   /** Screen px: silhouette left/right/top edges (exact Box3), px per model unit, and what he is doing. */
   debugState(): DebugState
+  /** Tests: read the canvas's edge dots back after every drawn frame (DebugState.edge). */
+  debugProbe(on: boolean): void
+  /**
+   * scripts/render-still.mjs: draws `kind` (held, no idle motion) into the still frame (engine/stillFrame)
+   * and returns the canvas as a PNG with the frame's rect in canvas pixels (dots). Null without WebGL or
+   * when the window is too small for the frame at 3 px per dot.
+   */
+  debugStill(kind?: 'idle' | Action): { png: string; x: number; y: number; w: number; h: number } | null
   destroy(): void
 }

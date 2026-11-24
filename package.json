@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "e2e": "playwright test",
-    "images": "node scripts/build-images.mjs"
+    "images": "node scripts/build-images.mjs",
+    "still": "node scripts/render-still.mjs"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",

@@ -29,7 +29,7 @@ const PILL_CLEARANCE = 62
 const REACTION_MS = 3000
 
 /** Where the button and menu sit: on the bottom edge, beside his resting silhouette, on the room side. */
-type Anchor = { side: 'left' | 'right'; offset: number; badge: boolean; lift: number }
+type Anchor = { side: 'left' | 'right'; offset: number; badge: boolean; lift: number; shown: boolean }
 
 /** Gap to his silhouette and to the window edge (CSS px). */
 const gapFor = (W: number) => (W <= 900 ? 16 : 24)
@@ -38,16 +38,17 @@ function anchorFor(p: PlaceInfo, buttonW: number): Anchor {
   const gap = gapFor(p.W)
   const badge = p.kind === 'badge'
   const lift = p.lift // his floor above the window's bottom (dress-up stage on phones): sit on it too
+  const shown = p.shown // reduced motion: not drawn in About and the chapters, so no pill there either
   // The area he stands in: the window, or the dress-up stage beside its controls.
   const [a0, a1] = p.area
   // He stands right of the area's centre (or centred): the button goes on his left, else on his right.
   if ((p.left + p.right) / 2 >= (a0 + a1) / 2) {
     const room = p.left - gap - buttonW >= a0 + gap
     // No room beside him (phones: he is centred and wide): the area's corner on his right, over his sleeve.
-    return { side: 'right', offset: room ? p.W - p.left + gap : p.W - a1 + gap, badge, lift }
+    return { side: 'right', offset: room ? p.W - p.left + gap : p.W - a1 + gap, badge, lift, shown }
   }
   const room = a1 - p.right - gap - buttonW >= gap
-  return { side: 'left', offset: room ? p.right + gap : a0 + gap, badge, lift }
+  return { side: 'left', offset: room ? p.right + gap : a0 + gap, badge, lift, shown }
 }
 
 /**
@@ -181,6 +182,7 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
   }
 
   const badge = anchor?.badge ?? false
+  const away = anchor ? !anchor.shown : false
   const pos = (extraBottom: number): CSSProperties | undefined =>
     anchor
       ? { [anchor.side]: `${anchor.offset}px`, bottom: `calc(var(--char-edge) + ${anchor.lift + extraBottom}px)` }
@@ -194,7 +196,7 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
         className={`${pillClass} char-play`}
         // laid out but unseen until he has a place, so its width can be measured
         style={pos(0) ?? { visibility: 'hidden' }}
-        hidden={badge}
+        hidden={badge || away}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}

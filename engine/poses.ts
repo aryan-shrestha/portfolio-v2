@@ -65,6 +65,30 @@ export const DURATION: Record<Action | Gesture, number> = {
   cheer: 2.4,
 }
 
+/**
+ * Reduced motion (spec §7.8): a chosen action shows as one still pose held for its duration. The
+ * moment of each action that reads best on its own (a raised wave, the peek, the CHOO, mid-typing);
+ * vanish holds half-dissolved so there is still something of him to see.
+ */
+export const KEY_T: Record<Action | Gesture, number> = {
+  wave: 0.6,
+  dance: 0.17,
+  panic: 0.5,
+  fly: 1.6,
+  vanish: 0.65,
+  hiccup: 0.4,
+  peekaboo: 1.27,
+  selfie: 1.2,
+  dizzy: 2.0,
+  sneeze: 1.6,
+  sulk: 1.2,
+  deploying: 1.2,
+  think: 1,
+  point: 1,
+  thumbs: 0.9,
+  cheer: 1,
+}
+
 export const hasPose = (k: string): k is PoseKind => k === 'idle' || k === 'drag' || Object.hasOwn(DURATION, k)
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))

@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
-import type { EngineAPI } from '@/engine/types'
-import type { Gesture } from '@/engine/types'
-import { CASE_COMMENTS, QUIPS } from '@/engine/quips'
-import { getLook, subscribeLook } from '@/lib/lookState'
-import { ActionMenu } from './ActionMenu'
+import type { EngineAPI, Gesture } from '@/engine/types'
+import { StillFallback } from './StillFallback'
+
+/** The lazily loaded half: engine, menu, lines, look (components/character/live.ts). */
+type Live = typeof import('./live')
+type Loaded = { engine: EngineAPI; live: Live; webgl: boolean }
 
 declare global {
   interface Window {
@@ -22,6 +23,9 @@ const SCROLL_ARM_MS = 300
 const EXPOSE = process.env.NEXT_PUBLIC_E2E === '1' || process.env.NODE_ENV === 'development'
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+/** The width where the layout turns into the phone layout (spec §6.1, §7.3 mobile mode). */
+const PHONE = '(max-width: 900px)'
+const MOBILE_QUIP_MS = 3500
 
 /** The engine reads a section's placement from `data-place`; the case page's own root stays `right`. */
 let badgeStub: HTMLElement | null = null
@@ -35,14 +39,18 @@ function badgeSection(): HTMLElement {
 
 /**
  * The character layer (spec §5, §7.2, §7.7): rendered once in the root layout so it persists across
- * routes. The engine chunk (three.js + model) is imported only after the page is idle.
+ * routes. Everything about him but these few elements (engine, three.js, model, menu, lines) is one
+ * dynamic import, made only after the page is idle. Under reduced motion or without WebGL the engine
+ * shows him as the still image (StillFallback) instead of the live canvas (spec §7.7–7.8).
  */
 export function CharacterLayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const handleRef = useRef<HTMLDivElement>(null)
   const bubbleRef = useRef<HTMLDivElement>(null)
   const badgeRef = useRef<HTMLDivElement>(null)
-  const [engine, setEngine] = useState<EngineAPI | null>(null)
+  const stillRef = useRef<HTMLImageElement>(null)
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const engine = loaded?.engine ?? null
   const pathname = usePathname()
 
   // Load and mount the engine once, off the critical path.
@@ -50,23 +58,21 @@ export function CharacterLayer() {
     let cancelled = false
     let made: EngineAPI | null = null
     const load = () => {
-      import('@/engine')
-        .then(({ createEngine }) => {
-          const [c, h, b, g] = [canvasRef.current, handleRef.current, bubbleRef.current, badgeRef.current]
-          if (cancelled || !c || !h || !b || !g) return
-          const e = createEngine()
+      import('./live')
+        .then((live) => {
+          const [c, h, b, g, s] = [canvasRef.current, handleRef.current, bubbleRef.current, badgeRef.current, stillRef.current]
+          if (cancelled || !c || !h || !b || !g || !s) return
+          const e = live.createEngine()
           // the visitor's saved look (spec §7.6), before the first build
-          const look = getLook()
+          const look = live.getLook()
           e.setLook(look.base)
           e.setOutfit(look.outfit)
-          try {
-            e.mount(c, h, b, g)
-          } catch {
-            e.destroy() // no WebGL: the page stays readable without him (fallback image: Task 12)
-            return
-          }
+          // a returning visitor is greeted as one (spec §7.3); storage is optional
+          if (live.checkIn()) e.setGreeting(live.QUIPS.returning)
+          // false without WebGL: the still image, no interactions (spec §7.7)
+          const webgl = e.mount(c, h, b, g, s)
           made = e
-          setEngine(e)
+          setLoaded({ engine: e, live, webgl })
         })
         .catch(() => {
           // chunk failed to load: the site works without the character
@@ -84,44 +90,64 @@ export function CharacterLayer() {
 
   // Page events: narration gestures, copied email. (Pokes open the action menu: ActionMenu.)
   useEffect(() => {
-    if (!engine) return
+    if (!loaded) return
+    const { engine, live } = loaded
     const onLine = (e: Event) => {
       const g = (e as CustomEvent<{ gesture?: string }>).detail?.gesture
       // Reduced motion: no automatic gestures (spec §7.8).
       if (g && GESTURES.has(g) && !reducedMotion()) engine.gesture(g as Gesture)
     }
-    const onCopied = () => engine.say(QUIPS.copied, 2500)
+    const onCopied = () => engine.say(live.QUIPS.copied, 2500)
     window.addEventListener('narration:line', onLine)
     window.addEventListener('email:copied', onCopied)
     return () => {
       window.removeEventListener('narration:line', onLine)
       window.removeEventListener('email:copied', onCopied)
     }
-  }, [engine])
+  }, [loaded])
+
+  // Mobile mode (spec §7.3): when the window narrows past 900 px he remarks on it. Loading narrow is no crossing.
+  useEffect(() => {
+    if (!loaded) return
+    const { engine, live } = loaded
+    const phone = window.matchMedia(PHONE)
+    const onChange = () => {
+      if (phone.matches) engine.say(live.QUIPS.mobile, MOBILE_QUIP_MS)
+    }
+    phone.addEventListener('change', onChange)
+    return () => phone.removeEventListener('change', onChange)
+  }, [loaded])
 
   // Dress-up changes (and other tabs') reach him at once; the engine skips unchanged base traits.
   useEffect(() => {
-    if (!engine) return
+    if (!loaded) return
+    const { engine, live } = loaded
     const apply = () => {
-      const look = getLook()
+      const look = live.getLook()
       engine.setLook(look.base)
       engine.setOutfit(look.outfit)
     }
     apply()
-    return subscribeLook(apply)
-  }, [engine])
+    return live.subscribeLook(apply)
+  }, [loaded])
 
   // Every route: hand the new page's sections over; case pages get a comment, then the badge.
   useEffect(() => {
-    if (!engine) return
+    if (!loaded) return
+    const { engine, live, webgl } = loaded
     const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-place]')).filter(
       (el) => el.getClientRects().length > 0,
     )
-    engine.setSections(sections)
     const slug = sections.find((el) => el.dataset.caseComment)?.dataset.caseComment
+    // The still image (reduced motion, no WebGL) has no entrance: straight to the badge, clear of the text.
+    if (slug && (!webgl || reducedMotion())) {
+      engine.setSections([badgeSection()])
+      return
+    }
+    engine.setSections(sections)
     if (!slug) return
 
-    engine.say(CASE_COMMENTS[slug] ?? '', CASE_COMMENT_MS)
+    engine.say(live.CASE_COMMENTS[slug] ?? '', CASE_COMMENT_MS)
     let baseline = 0
     const onScroll = () => {
       if (Math.abs(window.scrollY - baseline) > 4) toBadge()
@@ -142,7 +168,7 @@ export function CharacterLayer() {
       window.clearTimeout(timer)
       window.removeEventListener('scroll', onScroll)
     }
-  }, [engine, pathname])
+  }, [loaded, pathname])
 
   // Test/dev hook, declared last so it appears once the listeners and sections above are in place.
   useEffect(() => {
@@ -153,14 +179,16 @@ export function CharacterLayer() {
     }
   }, [engine])
 
+  const Menu = loaded?.webgl ? loaded.live.ActionMenu : null
   return (
     <>
       <div ref={badgeRef} data-char="badge" aria-hidden="true" className="char-badge" />
       <canvas ref={canvasRef} data-char="canvas" aria-hidden="true" className="char-canvas" />
       <div ref={handleRef} data-char="handle" aria-hidden="true" className="char-handle" />
       <div ref={bubbleRef} data-char="bubble" aria-hidden="true" className="char-bubble" />
-      {/* keyed by route: a navigation closes the menu */}
-      {engine ? <ActionMenu key={pathname} engine={engine} /> : null}
+      <StillFallback ref={stillRef} />
+      {/* keyed by route: a navigation closes the menu; without WebGL there is nothing to play with */}
+      {Menu ? <Menu key={pathname} engine={loaded!.engine} /> : null}
     </>
   )
 }

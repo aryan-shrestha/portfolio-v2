@@ -113,7 +113,7 @@ test('narration lines and the copied email reach him', async ({ page }) => {
   await expect(page.locator('[data-char="bubble"]')).toHaveText('Copied! Talk soon.')
 })
 
-test('reduced motion: no automatic gestures and no scroll choreography', async ({ page }) => {
+test('reduced motion: no automatic gestures and no scroll choreography (details in fallbacks.spec)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
   await engineReady(page)
@@ -124,8 +124,9 @@ test('reduced motion: no automatic gestures and no scroll choreography', async (
     const s = document.querySelectorAll<HTMLElement>('main > section')[3]
     window.scrollTo(0, s.offsetTop)
   })
-  await page.waitForTimeout(300)
-  const d = await debug(page)
+  // the chapter's placement, but he is not drawn over its reading text (no slide in, no gesture)
+  await expect.poll(async () => (await debug(page)).placement).toBe('right')
+  const d = (await debug(page)) as Debug & { view: string }
   expect(d.action).toBeNull()
-  expect(d.placement).toBe('hero')
+  expect(d.view).toBe('hidden')
 })

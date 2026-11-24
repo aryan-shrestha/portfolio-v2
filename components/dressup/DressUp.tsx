@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { DressUpControls } from './DressUpControls'
+import { LazyDressUpControls } from './LazyDressUpControls'
 
 /**
  * The dress-up page (spec §7.6), also the 404 (spec §5). The root declares the `stage` placement; the
@@ -53,7 +53,7 @@ export function DressUp({
         className="relative px-(--m) pt-6 pb-[max(var(--m),env(safe-area-inset-bottom))] wide:overflow-y-auto wide:py-[clamp(16px,3svh,40px)] wide:pl-0"
       >
         <div className="rounded-2xl border-2 border-ink bg-white p-[clamp(20px,1.8vw,26px)] shadow-[6px_6px_0_rgba(0,0,0,0.35)]">
-          <DressUpControls
+          <LazyDressUpControls
             heading={
               <h2 id="dressup-controls" className="display text-[clamp(26px,2.4vw,34px)] font-extrabold">
                 Pick a look

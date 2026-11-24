@@ -193,6 +193,20 @@ body {
   pointer-events: none;
   opacity: 0;
 }
+/* The still image (reduced motion, no WebGL; spec §7.7–7.8): laid out by the engine like the model. */
+.char-still {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 30;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+.char-still[hidden] {
+  display: none;
+}
 /* Attached bubble: its bottom-right corner sits on the anchor above-left of his head. */
 .char-bubble {
   position: fixed;
