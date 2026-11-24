@@ -112,11 +112,22 @@ body {
   color: var(--accent);
 }
 
+/* Reduced motion (spec §7.8): narration reads as plain text blocks — every bubble shown, static,
+   in a compact list on the character's side (desktop) or below the frame (phones). The screen
+   still follows the active line (instant swap). Unlayered, so it overrides the Tailwind utilities. */
 @media (prefers-reduced-motion: reduce) {
   .line .bubble,
   .line.past .bubble {
-    transition: none;
+    opacity: 1;
     transform: none;
+    transition: none;
+    position: static;
+  }
+  .line {
+    min-height: 0;
+  }
+  .line + .line {
+    margin-top: 20px;
   }
   .about-word {
     opacity: 1;
@@ -124,5 +135,18 @@ body {
   }
   .about-word.hl {
     color: var(--accent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (max-width: 900px) {
+  /* No sticky stage on phones: the lines follow the frame in normal flow, never over the title. */
+  .chapter-stage {
+    position: relative;
+    height: auto;
+  }
+  .chapter-lines {
+    margin-top: 0;
+    padding-top: 8px;
+    padding-bottom: 12svh;
   }
 }

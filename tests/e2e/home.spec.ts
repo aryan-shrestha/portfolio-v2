@@ -167,3 +167,48 @@ test('reduced motion: every About word is on', async ({ page }) => {
   expect(opacities.length).toBeGreaterThan(30)
   expect(new Set(opacities)).toEqual(new Set(['1']))
 })
+
+for (const vp of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`reduced motion at ${vp.width}×${vp.height}: every narration bubble shows as a plain block, clear of the title`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    const sections = page.locator('main > section')
+    for (let c = 0; c < 3; c++) {
+      const section = sections.nth(2 + c)
+      const bubbles = section.locator('.line .bubble')
+      await expect(bubbles).toHaveCount(3)
+      const styles = await bubbles.evaluateAll((bs) =>
+        bs.map((b) => {
+          const s = getComputedStyle(b)
+          return `${s.opacity}|${s.position}`
+        }),
+      )
+      expect(styles).toEqual(['1|static', '1|static', '1|static'])
+
+      // Walk through the chapter: no bubble may ever overlap the chapter title.
+      const [top, height] = await section.evaluate((s) => [(s as HTMLElement).offsetTop, (s as HTMLElement).offsetHeight])
+      for (let y = top - vp.height; y <= top + height; y += Math.round(vp.height / 10)) {
+        await page.evaluate((t) => window.scrollTo(0, t), y)
+        await frames(page)
+        const overlaps = await section.evaluate((s) => {
+          const h = s.querySelector('h2')!.getBoundingClientRect()
+          return [...s.querySelectorAll('.line .bubble')].filter((b) => {
+            const r = b.getBoundingClientRect()
+            return r.left < h.right && r.right > h.left && r.top < h.bottom && r.bottom > h.top
+          }).length
+        })
+        expect(overlaps, `chapter ${c} at scrollY ${y}`).toBe(0)
+      }
+      for (let i = 0; i < 3; i++) {
+        await bubbles.nth(i).scrollIntoViewIfNeeded()
+        await expect(bubbles.nth(i)).toBeVisible()
+      }
+    }
+  })
+}

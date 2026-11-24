@@ -60,7 +60,7 @@ export function Chapter({ chapter, title }: { chapter: ChapterData; title: strin
       className="grid-bg relative bg-(--tint) text-(--fg)"
       style={vars}
     >
-      <div className="sticky top-0 h-svh overflow-hidden px-(--m) pt-[clamp(56px,8svh,80px)] pb-(--m) phone:pt-8">
+      <div className="chapter-stage sticky top-0 h-svh overflow-hidden px-(--m) pt-[clamp(56px,8svh,80px)] pb-(--m) phone:pt-8">
         <div
           className={`flex w-[58%] items-end justify-between gap-5 phone:w-full phone:flex-col phone:items-start phone:gap-4 ${right ? 'mr-auto' : 'ml-auto'}`}
         >
@@ -76,7 +76,7 @@ export function Chapter({ chapter, title }: { chapter: ChapterData; title: strin
         </div>
       </div>
 
-      <div className="pointer-events-none relative -mt-[100svh] px-(--m) pt-[42svh] pb-[40svh] phone:pt-[68svh]">
+      <div className="chapter-lines pointer-events-none relative -mt-[100svh] px-(--m) pt-[42svh] pb-[40svh] phone:pt-[68svh]">
         {chapter.lines.map((line, i) => (
           <div
             key={i}
