@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import type { EngineAPI } from '@/engine/types'
 import type { Gesture } from '@/engine/types'
 import { CASE_COMMENTS, QUIPS } from '@/engine/quips'
+import { getLook, subscribeLook } from '@/lib/lookState'
 import { ActionMenu } from './ActionMenu'
 
 declare global {
@@ -54,6 +55,10 @@ export function CharacterLayer() {
           const [c, h, b, g] = [canvasRef.current, handleRef.current, bubbleRef.current, badgeRef.current]
           if (cancelled || !c || !h || !b || !g) return
           const e = createEngine()
+          // the visitor's saved look (spec §7.6), before the first build
+          const look = getLook()
+          e.setLook(look.base)
+          e.setOutfit(look.outfit)
           try {
             e.mount(c, h, b, g)
           } catch {
@@ -92,6 +97,18 @@ export function CharacterLayer() {
       window.removeEventListener('narration:line', onLine)
       window.removeEventListener('email:copied', onCopied)
     }
+  }, [engine])
+
+  // Dress-up changes (and other tabs') reach him at once; the engine skips unchanged base traits.
+  useEffect(() => {
+    if (!engine) return
+    const apply = () => {
+      const look = getLook()
+      engine.setLook(look.base)
+      engine.setOutfit(look.outfit)
+    }
+    apply()
+    return subscribeLook(apply)
   }, [engine])
 
   // Every route: hand the new page's sections over; case pages get a comment, then the badge.

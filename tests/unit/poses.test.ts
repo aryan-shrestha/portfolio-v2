@@ -1,7 +1,9 @@
 import { Box3, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOOK } from '@/engine/look'
-import { WIDEST_TOTAL } from '@/engine/placement'
+import { simulate } from '@/engine/measure'
+import { BOX } from '@/engine/placement'
+import { silhouette } from '@/engine/silhouette'
 import { buildCharacter } from '@/engine/model/build'
 import { applyPose } from '@/engine/pose-rig'
 import { DURATION, hasPose, poseFor, type Pose, type PoseCtx, type PoseKind } from '@/engine/poses'
@@ -22,7 +24,6 @@ function samples(kind: PoseKind, c = ctx): { t: number; p: Pose }[] {
   return out
 }
 
-const DT = 1 / 60
 
 describe('poseFor', () => {
   it('idle: arms hang just off the body, smile, breathing bob from ctx.now', () => {
@@ -167,29 +168,23 @@ describe('new actions read as what they are', () => {
 })
 
 describe('new actions stay inside the containment budget (spec §7.5)', () => {
-  // Frame by frame at 60 fps from a settled idle, as the runtime damps it (elbows fold mid-swing).
-  // Total width is checked for every kind below (WIDEST_TOTAL); the new actions keep to 5.75, the
-  // old phone budget. Per side, a raise briefly passes ±2.6 the same way the ported wave and cheer do
-  // (≈ 3.1 here); the runtime nudges him inward (§7.5.1).
+  // Frame by frame at 60 fps from a settled idle, as the runtime damps it (engine/measure: the same
+  // simulation the bounds tests use). The total width of every kind, for every hair × outfit, is pinned
+  // by WIDEST_TOTAL in tests/unit/bounds.test.ts; the new actions also keep to 5.75 (the old phone
+  // budget). Per side, a raise briefly passes ±2.6 the same way the ported wave and cheer do (≈ 3.1
+  // here); the runtime nudges him inward (§7.5.1).
   const settled = (k: Action, t: number) => t > 0.6 && t < DURATION[k] - 0.6
   for (const k of NEW) {
-    it(`${k}: width ≤ 5.75, sides ≤ 3.15 in swings, top within 3.05 (+ lift)`, () => {
-      for (const toward of [1, -1] as const) {
-        const rig = buildCharacter(DEFAULT_LOOK)
-        const c = { ...ctx, toward }
-        applyPose(rig, poseFor('idle', 0, c), Infinity)
-        for (let f = 0; f * DT <= DURATION[k] + 0.5; f++) {
-          const t = f * DT
-          applyPose(rig, poseFor(k, t, c), DT)
-          if (f % 2) continue
-          rig.root.updateMatrixWorld(true)
-          const b = new Box3().setFromObject(rig.root, true)
-          const at = `${k} toward=${toward} t=${t.toFixed(2)}`
-          expect(b.max.x - b.min.x, at).toBeLessThanOrEqual(5.75)
-          expect(Math.max(-b.min.x, b.max.x), at).toBeLessThanOrEqual(3.15)
-          expect(b.max.y, at).toBeLessThanOrEqual(3.05 + Math.max(0, rig.body.position.y))
-        }
-      }
+    it(`${k}: width ≤ 5.75, sides ≤ 3.15 in swings, top within BOX.y1 (+ lift)`, () => {
+      const b = new Box3()
+      simulate(DEFAULT_LOOK, k, (rig, t, toward) => {
+        if (Math.round(t * 60) % 2) return
+        silhouette(rig.root, b)
+        const at = `${k} toward=${toward} t=${t.toFixed(2)}`
+        expect(b.max.x - b.min.x, at).toBeLessThanOrEqual(5.75)
+        expect(Math.max(-b.min.x, b.max.x), at).toBeLessThanOrEqual(3.15)
+        expect(b.max.y, at).toBeLessThanOrEqual(BOX.y1 + Math.max(0, rig.body.position.y))
+      })
     })
   }
 
@@ -209,36 +204,19 @@ describe('new actions stay inside the containment budget (spec §7.5)', () => {
   })
 })
 
-describe('WIDEST_TOTAL covers every pose (R13, spec §7.5.2/§7.5.4)', () => {
-  // Every kind, simulated at 60 fps from a settled idle with the runtime's damping and elbow fold,
-  // both sides, through the return to idle. Drag sweeps its velocity tilt (±0.3) for 3 s.
-  const KINDS: PoseKind[] = ['idle', 'drag', ...(Object.keys(DURATION) as (Action | Gesture)[])]
-  const widest = (k: PoseKind) => {
-    let w = 0
-    for (const toward of [1, -1] as const) {
-      const rig = buildCharacter(DEFAULT_LOOK)
-      applyPose(rig, poseFor('idle', 0, { ...ctx, toward }), Infinity)
-      const len = k === 'idle' || k === 'drag' ? 3 : DURATION[k] + 0.8
-      for (let f = 0; f * DT <= len; f++) {
-        const t = f * DT
-        applyPose(rig, poseFor(k, t, { now: t, toward, vx: k === 'drag' ? 40 * Math.sin(t * 2) : 0 }), DT)
-        rig.root.updateMatrixWorld(true)
-        const b = new Box3().setFromObject(rig.root, true)
-        w = Math.max(w, b.max.x - b.min.x)
-      }
-    }
-    return w
-  }
-  for (const k of KINDS) {
-    it(`${k}: widest total silhouette ≤ WIDEST_TOTAL`, () => {
-      expect(widest(k)).toBeLessThanOrEqual(WIDEST_TOTAL)
-    })
-  }
-  it('WIDEST_TOTAL is the measured maximum + 0.1 margin, rounded up to 0.05 (not padded beyond that)', () => {
-    const max = Math.max(...KINDS.map(widest))
-    expect(WIDEST_TOTAL).toBeCloseTo(Math.ceil((max + 0.1) / 0.05) * 0.05, 9)
+describe('silhouette', () => {
+  it('matches Box3.setFromObject(root, true) exactly (outline meshes add no points)', () => {
+    const rig = buildCharacter({ base: { ...DEFAULT_LOOK.base, hair: 'curly-top' }, outfit: 'detective' })
+    applyPose(rig, poseFor('panic', 0.4, ctx), Infinity)
+    rig.root.updateMatrixWorld(true)
+    const a = new Box3().setFromObject(rig.root, true)
+    const b = silhouette(rig.root, new Box3())
+    expect(b.min.toArray()).toEqual(a.min.toArray())
+    expect(b.max.toArray()).toEqual(a.max.toArray())
   })
 })
+
+// WIDEST_TOTAL (ruling R13) is measured for every hair style × outfit in tests/unit/bounds.test.ts.
 
 describe('quips', () => {
   it('has the hero, outro and copy lines verbatim', () => {

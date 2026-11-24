@@ -285,3 +285,49 @@ for (const vp of [
     await expect.poll(async () => (await debug(page)).action).toBe('deploying')
   })
 }
+
+// Task 11: dress-up persistence, the 404 dress-up page, chapter outfits over the visitor's.
+type LookDebug = Debug & { outfit: string }
+const lookDebug = (page: Page) => page.evaluate(() => (window as EngineWindow).__engine!.debugState() as LookDebug)
+
+test('dress-up: curly-top + detective persist across a reload, and he wears them', async ({ page }) => {
+  const errors = trackErrors(page)
+  await page.goto('/dress-up')
+  await engineReady(page)
+  await page.getByRole('button', { name: 'Curly top', exact: true }).click()
+  await page.getByRole('button', { name: 'Detective', exact: true }).click()
+  await expect.poll(async () => (await lookDebug(page)).outfit).toBe('detective')
+  await page.reload()
+  await engineReady(page)
+  await expect(page.getByRole('button', { name: 'Curly top', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Detective', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('button', { name: 'Wavy fringe', exact: true })).toHaveAttribute('aria-pressed', 'false')
+  await expect.poll(async () => (await lookDebug(page)).outfit).toBe('detective')
+  expect((await lookDebug(page)).placement).toBe('stage')
+  expect(errors()).toEqual([])
+})
+
+test('an unknown URL answers 404 with the dress-up page under its own heading', async ({ page }) => {
+  const res = await page.goto('/missing')
+  expect(res?.status()).toBe(404)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText("This page doesn't exist — but you can dress me up")
+  await expect(page.getByRole('button', { name: 'Hair colour: dark brown' })).toBeVisible()
+  await engineReady(page)
+  await expect.poll(async () => (await lookDebug(page)).placement).toBe('stage')
+})
+
+test('visitor outfit hardhat: chapter 1 wears blazer-bowtie, the about section hardhat', async ({ page }) => {
+  await page.goto('/dress-up')
+  await page.getByRole('button', { name: 'Hard hat', exact: true }).click()
+  await page.goto('/')
+  await engineReady(page)
+  const scrollToSection = (i: number) =>
+    page.evaluate((i) => window.scrollTo(0, document.querySelectorAll<HTMLElement>('main > section')[i].offsetTop), i)
+  await scrollToSection(1) // About
+  await expect.poll(async () => (await lookDebug(page)).placement).toBe('left')
+  expect((await lookDebug(page)).outfit).toBe('hardhat')
+  await scrollToSection(2) // chapter 1: Napa Valley Weddings
+  await expect.poll(async () => (await lookDebug(page)).outfit).toBe('blazer-bowtie')
+  await scrollToSection(1)
+  await expect.poll(async () => (await lookDebug(page)).outfit).toBe('hardhat')
+})

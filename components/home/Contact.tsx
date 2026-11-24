@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { site } from '@/lib/site'
 import { ContactEmail } from './ContactEmail'
 
@@ -42,9 +43,10 @@ export function Contact() {
           GitHub
         </a>
         <Dot />
-        <a href="/dress-up" className={footerLink}>
+        {/* client navigation: the character layer persists into the dress-up page (spec §5) */}
+        <Link href="/dress-up" className={footerLink}>
           Dress me up
-        </a>
+        </Link>
       </footer>
     </section>
   )

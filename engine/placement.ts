@@ -2,8 +2,17 @@ import type { Placement, PlacementKind } from './types'
 
 export type { Placement, PlacementKind }
 
-/** Model-unit bounds around the character origin. y1 is replaced by the measured maximum (Task 11). */
-export const BOX = { x0: -2.6, x1: 2.6, y1: 3.05 }
+/**
+ * Model-unit bounds around the character origin. y1 is the measured top (spec §7.6): the highest point
+ * of every hair style × outfit over idle, wave, dance, panic and drag, simulated like WIDEST_TOTAL
+ * (hats 3.14, curly-top 3.12, Aryan's own look 2.98), rounded up to 0.05. tests/unit/bounds.test.ts
+ * re-measures it and fails if a style, outfit or pose rises above it.
+ */
+export const BOX = { x0: -2.6, x1: 2.6, y1: 3.15 }
+/** Dress-up stage: the model y that sits on the stage floor, low enough to show his hands and what they hold. */
+export const STAGE_CUT = -2.4
+/** The dress-up stage area in CSS px from the window's top-left (spec §7.6: he is centred on it). */
+export type StageRect = { left: number; top: number; right: number; bottom: number }
 /**
  * Widest total silhouette of any pose, model units (spec §7.5.2, updated per §7.5.4 / ruling R13): the
  * maximum over every action, gesture, idle and drag, simulated at 60 fps from idle with the runtime's
@@ -17,7 +26,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function computePlacements(
   W: number,
   H: number,
-  opts: { copyBottom?: number } = {},
+  opts: { copyBottom?: number; stage?: StageRect } = {},
 ): Record<PlacementKind, Placement> {
   const mobile = W <= 900
   const m = Math.max(16, W * 0.03)
@@ -41,7 +50,11 @@ export function computePlacements(
   const cx = -W / 2 + edge + d / 2
   const cy = -H / 2 + edge + d / 2
   const Sb = d / 3.1
-  const Sst = Math.min((W - 48) / WIDEST_TOTAL, (H - 48) / height)
+  // Stage: centred on its area (the whole window by default), fitting the widest pose and the tallest
+  // hat; his floor is the area's bottom edge and nothing of him draws below it.
+  const r = opts.stage ?? { left: 0, top: 0, right: W, bottom: H }
+  const Sst = Math.max(0, Math.min((r.right - r.left - 48) / WIDEST_TOTAL, (r.bottom - r.top - 48) / (BOX.y1 - STAGE_CUT)))
+  const floor = H / 2 - r.bottom
 
   return {
     hero,
@@ -49,7 +62,7 @@ export function computePlacements(
     left: { x: -W / 2 + m + 1.75 * Ss, y: bottom(Ss), S: Ss, talk: 0, badge: 0 },
     right: { x: W / 2 - m - 1.75 * Ss, y: bottom(Ss), S: Ss, talk: 0, badge: 0 },
     badge: { x: cx, y: cy - 1.78 * Sb, S: Sb, talk: 0, badge: 1, cx, cy, d },
-    stage: { x: 0, y: bottom(Sst), S: Sst, talk: 0, badge: 0 },
+    stage: { x: (r.left + r.right) / 2 - W / 2, y: floor - STAGE_CUT * Sst, S: Sst, talk: 0, badge: 0, floor },
   }
 }
 
@@ -88,6 +101,7 @@ export function placementAt(
       cx: nx.cx ?? st.cx,
       cy: nx.cy ?? st.cy,
       d: nx.d ?? st.d,
+      floor: lerp(st.floor ?? -H / 2, nx.floor ?? -H / 2, e),
     }
     if (p > 0.5) current = k
   }

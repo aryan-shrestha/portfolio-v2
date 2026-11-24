@@ -2,11 +2,13 @@ import { AmbientLight, Box3, DirectionalLight, OrthographicCamera, Scene, Vector
 import { containShift } from './contain'
 import { DEFAULT_LOOK, type Look } from './look'
 import { buildCharacter, type Rig } from './model/build'
-import { computePlacements, placementAt, smootherstep, type PlacementState } from './placement'
-import { applyPose } from './pose-rig'
+import { applyOutfit } from './model/outfits'
+import { computePlacements, placementAt, smootherstep, type PlacementState, type StageRect } from './placement'
+import { applyPose, copyPose } from './pose-rig'
 import { DURATION, hasPose, poseFor, type PoseKind } from './poses'
 import { QUIPS } from './quips'
 import { createDitherPass } from './render/dither'
+import { silhouette } from './silhouette'
 import type { EngineAPI, Gesture, OutfitId, Placement, PlacementKind, PlaceInfo } from './types'
 
 type Section = { el: HTMLElement; kind: PlacementKind; outfit?: OutfitId; gesture?: Gesture; top: number }
@@ -29,7 +31,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const damp = (a: number, b: number, k: number, dt: number) => a + (b - a) * (1 - Math.exp(-k * dt))
 const stateOf = (p: Placement): PlacementState => ({ ...p, b: p.badge })
-const mix = (a: PlacementState, b: PlacementState, t: number): PlacementState => ({
+const mix = (a: PlacementState, b: PlacementState, t: number, H: number): PlacementState => ({
   x: lerp(a.x, b.x, t),
   y: lerp(a.y, b.y, t),
   S: lerp(a.S, b.S, t),
@@ -38,6 +40,7 @@ const mix = (a: PlacementState, b: PlacementState, t: number): PlacementState =>
   cx: b.cx ?? a.cx,
   cy: b.cy ?? a.cy,
   d: b.d ?? a.d,
+  floor: lerp(a.floor ?? -H / 2, b.floor ?? -H / 2, t),
 })
 
 export function createEngine(): EngineAPI {
@@ -57,9 +60,8 @@ export function createEngine(): EngineAPI {
   fill.position.set(4, -1, 3)
   scene.add(ambient, key, fill)
 
-  const look: Look = { base: { ...DEFAULT_LOOK.base }, outfit: DEFAULT_LOOK.outfit }
-  let visitorOutfit: OutfitId = look.outfit
-  let chapterOutfit: OutfitId | null = null
+  let base: Look['base'] = { ...DEFAULT_LOOK.base }
+  let visitorOutfit: OutfitId = DEFAULT_LOOK.outfit
 
   // layout
   let W = 0
@@ -116,15 +118,23 @@ export function createEngine(): EngineAPI {
   }
 
   const kindNow = (): PlacementKind => (current >= 0 && sections[current] ? sections[current].kind : 'hero')
-  const outfit = () => chapterOutfit ?? visitorOutfit
+  /**
+   * The one rule for what he wears (spec §6.2, §7.6): inside a project chapter, that chapter's outfit;
+   * anywhere else, the visitor's. `current` flips at the slide's midpoint (p > 0.5), so the swap happens
+   * mid-slide on the way in and on the way out, never at a section edge. Base traits are always the visitor's.
+   */
+  const wornOutfit = (): OutfitId => (current >= 0 ? sections[current]?.outfit : undefined) ?? visitorOutfit
   const clock = () => performance.now() / 1000
 
+  /** (Re)builds the model in the current look; a rebuild picks up the old rig's pose so nothing jumps. */
   function buildRig() {
+    const next = buildCharacter({ base, outfit: wornOutfit() })
     if (rig) {
+      copyPose(rig, next)
       scene.remove(rig.root)
       rig.dispose()
     }
-    rig = buildCharacter(look)
+    rig = next
     scene.add(rig.root)
   }
 
@@ -132,6 +142,13 @@ export function createEngine(): EngineAPI {
   function relayout() {
     const mobile = W <= 900
     let copyBottom: number | undefined
+    let stage: StageRect | undefined
+    for (const s of sections) {
+      if (s.kind !== 'stage') continue
+      // the area kept free for him (dress-up: [data-stage]; else the section itself), in window px
+      const r = (s.el.querySelector('[data-stage]') ?? s.el).getBoundingClientRect()
+      stage = { left: r.left, top: r.top, right: r.right, bottom: Math.min(H, r.bottom) }
+    }
     if (mobile) {
       for (const s of sections) {
         if (s.kind !== 'hero' && s.kind !== 'outro') continue
@@ -139,7 +156,7 @@ export function createEngine(): EngineAPI {
         if (copy) copyBottom = Math.max(copyBottom ?? 0, copy.getBoundingClientRect().bottom - s.el.getBoundingClientRect().top)
       }
     }
-    P = computePlacements(W, H, { copyBottom })
+    P = computePlacements(W, H, { copyBottom, stage })
     for (const s of sections) s.top = s.el.getBoundingClientRect().top + window.scrollY
     topsDirty = false
     // Case pages reserve a gutter of 0.85 × hero S × 3.5 (spec §6.6).
@@ -183,16 +200,25 @@ export function createEngine(): EngineAPI {
     const badge = kind === 'badge' && p.d !== undefined && p.cx !== undefined
     const left = badge ? W / 2 + p.cx! - p.d! / 2 : W / 2 + p.x - REST_HALF * p.S
     const right = badge ? W / 2 + p.cx! + p.d! / 2 : W / 2 + p.x + REST_HALF * p.S
-    if (place && place.kind === kind && Math.abs(place.left - left) < 1 && Math.abs(place.right - right) < 1) return
-    place = { kind, left, right, W, H }
+    const lift = p.floor === undefined ? 0 : Math.max(0, H / 2 + p.floor)
+    if (
+      place &&
+      place.kind === kind &&
+      Math.abs(place.left - left) < 1 &&
+      Math.abs(place.right - right) < 1 &&
+      Math.abs(place.lift - lift) < 1
+    )
+      return
+    place = { kind, left, right, lift, W, H }
     places.forEach((cb) => cb(place!))
   }
 
-  /** Where he should be this frame: scroll-scrubbed (spec §6.1), or still at the hero under reduced motion. */
+  /** Where he should be this frame: scroll-scrubbed (spec §6.1), or still under reduced motion (the hero, or his dress-up stage). */
   function target(): PlacementState {
     if (reduced || sections.length === 0) {
-      current = -1
-      return stateOf(P.hero)
+      // Reduced motion: no scroll choreography. A dress-up stage is no choreography: he stays on it.
+      current = reduced ? sections.findIndex((s) => s.kind === 'stage') : -1
+      return stateOf(current >= 0 ? P.stage : P.hero)
     }
     const r = placementAt(window.scrollY, H, sections, P)
     current = r.current
@@ -211,7 +237,7 @@ export function createEngine(): EngineAPI {
     let st = target()
     if (blendFrom) {
       blendT += dt
-      st = mix(blendFrom, st, smootherstep(Math.min(1, blendT / BLEND)))
+      st = mix(blendFrom, st, smootherstep(Math.min(1, blendT / BLEND)), H)
       if (blendT >= BLEND) blendFrom = null
     }
     shown = st
@@ -223,9 +249,9 @@ export function createEngine(): EngineAPI {
       if (g && !reduced) start(g)
       lastSection = current
     }
-    // Chapter outfit overlays the visitor's from the slide's midpoint; released on leaving.
-    const co = current >= 0 ? (sections[current].outfit ?? null) : null
-    if (co !== chapterOutfit) chapterOutfit = co // geometry swap: Task 11
+    // What he wears: swapped (old layer freed) only when the resolved outfit changes.
+    const worn = wornOutfit()
+    if (rig.look.outfit !== worn) applyOutfit(rig, worn)
 
     if (action) {
       actionT += dt
@@ -276,8 +302,7 @@ export function createEngine(): EngineAPI {
 
     // Containment on this frame's final pose (spec §7.5.1), not while he is the badge.
     if (st.b <= 0.01) {
-      root.updateMatrixWorld(true)
-      sil.setFromObject(root, true)
+      silhouette(root, sil)
       const { dx, dy } = containShift({ minX: sil.min.x, maxX: sil.max.x, maxY: sil.max.y }, W, H, 0.06 * st.S + 2 * PX)
       if (dx) {
         offset.x += dx
@@ -341,7 +366,13 @@ export function createEngine(): EngineAPI {
     setStyle(els.bubble, 'top', `${clamp(H / 2 - v.y, bh + 8, H - 8).toFixed(1)}px`)
 
     // No camera flash under reduced motion (a full-window brightness change).
-    dither.render(scene, camera, { px: PX, clip, fade: pose.visible ?? 1, flash: reduced ? 0 : (pose.flash ?? 0) })
+    dither.render(scene, camera, {
+      px: PX,
+      clip,
+      floor: st.floor,
+      fade: pose.visible ?? 1,
+      flash: reduced ? 0 : (pose.flash ?? 0),
+    })
   }
 
   function run() {
@@ -455,13 +486,14 @@ export function createEngine(): EngineAPI {
     },
     say,
 
-    setLook(base) {
-      look.base = { ...base }
+    setLook(next) {
+      const same = (Object.keys(next) as (keyof Look['base'])[]).every((k) => next[k] === base[k])
+      if (same) return
+      base = { ...next }
       if (rig) buildRig()
     },
-    setOutfit(id, priority = 'visitor') {
-      if (priority === 'chapter') chapterOutfit = id
-      else visitorOutfit = id
+    setOutfit(id) {
+      visitorOutfit = id // the next frame resolves what he wears (wornOutfit)
     },
 
     onPoke(cb) {
@@ -477,17 +509,18 @@ export function createEngine(): EngineAPI {
 
     debugState() {
       const a = action === 'idle' || action === 'drag' ? null : action
-      if (!rig) return { minX: 0, maxX: 0, top: 0, S: 0, placement: kindNow(), outfit: outfit(), action: a }
-      rig.root.updateMatrixWorld(true)
-      sil.setFromObject(rig.root, true)
+      const geometries = renderer?.info.memory.geometries ?? 0
+      if (!rig) return { minX: 0, maxX: 0, top: 0, S: 0, placement: kindNow(), outfit: wornOutfit(), action: a, geometries }
+      silhouette(rig.root, sil)
       return {
         minX: W / 2 + sil.min.x,
         maxX: W / 2 + sil.max.x,
         top: H / 2 - sil.max.y,
         S: rig.root.scale.x,
         placement: kindNow(),
-        outfit: outfit(),
+        outfit: rig.look.outfit,
         action: a,
+        geometries,
       }
     },
 

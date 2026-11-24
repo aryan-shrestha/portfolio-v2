@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   BOX,
+  STAGE_CUT,
   WIDEST_TOTAL,
   computePlacements,
   placementAt,
@@ -11,8 +12,9 @@ import {
 
 describe('computePlacements desktop 1440x900', () => {
   const P = computePlacements(1440, 900)
-  it('hero S = min(0.86H/4.25, 0.42W/5.2)', () => {
-    expect(P.hero.S).toBeCloseTo(116.31, 2)
+  it('hero S = min(0.86H/(BOX.y1 + 1.2), 0.42W/5.2)', () => {
+    expect(P.hero.S).toBeCloseTo(Math.min((0.86 * 900) / (BOX.y1 + 1.2), (0.42 * 1440) / 5.2), 9)
+    expect(P.hero.S).toBeCloseTo(116.31, 2) // width-bound at 1440×900
   })
   it('hero right edge sits at W/2 - max(16, 0.03W)', () => {
     expect(P.hero.x + BOX.x1 * P.hero.S).toBeCloseTo(720 - 43.2, 6)
@@ -37,15 +39,31 @@ describe('computePlacements desktop 1440x900', () => {
     expect(P.badge.x).toBe(P.badge.cx)
     expect(P.badge.y).toBeCloseTo(P.badge.cy! - 1.78 * P.badge.S, 9)
   })
-  it('stage is centred and fits the widest pose and the height', () => {
+  it('stage (no area given): centred in the window, fits the widest pose and the height down to STAGE_CUT', () => {
     expect(P.stage.x).toBe(0)
-    expect(P.stage.S).toBeCloseTo(Math.min((1440 - 48) / WIDEST_TOTAL, (900 - 48) / 4.25), 9)
+    expect(P.stage.S).toBeCloseTo(Math.min((1440 - 48) / WIDEST_TOTAL, (900 - 48) / (BOX.y1 - STAGE_CUT)), 9)
+    expect(P.stage.floor).toBe(-450)
+    expect(P.stage.y + STAGE_CUT * P.stage.S).toBeCloseTo(-450, 9) // STAGE_CUT sits on the floor
+  })
+  it('stage area: centred on it, floor on its bottom edge, top of the tallest hat inside it', () => {
+    const area = { left: 0, top: 220, right: 1000, bottom: 900 }
+    const Q = computePlacements(1440, 900, { stage: area })
+    expect(Q.stage.x).toBeCloseTo(500 - 720, 9)
+    expect(Q.stage.S).toBeCloseTo(Math.min((1000 - 48) / WIDEST_TOTAL, (680 - 48) / (BOX.y1 - STAGE_CUT)), 9)
+    const top = 450 - (Q.stage.y + BOX.y1 * Q.stage.S) // CSS px from the window top
+    expect(top).toBeGreaterThanOrEqual(220 + 48 - 1e-9)
+    // phones: a band at the top of the window; his floor is the band's bottom
+    const R = computePlacements(390, 844, { stage: { left: 0, top: 80, right: 390, bottom: 420 } })
+    expect(R.stage.floor).toBe(422 - 420)
+    expect(R.stage.x).toBeCloseTo(0, 9)
+    expect(R.stage.S).toBeCloseTo(Math.min((390 - 48) / WIDEST_TOTAL, (340 - 48) / (BOX.y1 - STAGE_CUT)), 9)
+    expect((R.stage.S * WIDEST_TOTAL) / 2).toBeLessThanOrEqual(195 - 24 + 1e-9) // widest pose clears both edges
   })
 })
 
 describe('computePlacements phone 390x844', () => {
   const P = computePlacements(390, 844)
-  it('hero S = min(0.42H/4.55, (W-24)/WIDEST_TOTAL), centred', () => {
+  it('hero S = min(0.42H/(BOX.y1 + 1.5), (W-24)/WIDEST_TOTAL), centred', () => {
     expect(WIDEST_TOTAL).toBe(6.35)
     expect(P.hero.S).toBeCloseTo(366 / WIDEST_TOTAL, 9) // 57.64
     expect(P.hero.x).toBe(0)
@@ -62,9 +80,9 @@ describe('computePlacements phone 390x844', () => {
   })
   it('copyBottom caps hero so the silhouette top clears the copy by 12px', () => {
     const Q = computePlacements(390, 844, { copyBottom: 600 })
-    const top = 844 / 2 - (Q.hero.y + 3.05 * Q.hero.S)
+    const top = 844 / 2 - (Q.hero.y + BOX.y1 * Q.hero.S)
     expect(top).toBeGreaterThanOrEqual(612 - 1e-9)
-    expect(Q.hero.S).toBeCloseTo((844 - 612) / 4.55, 9)
+    expect(Q.hero.S).toBeCloseTo((844 - 612) / (BOX.y1 + 1.5), 9)
   })
   it('copyBottom does not change a hero that already clears the copy', () => {
     expect(computePlacements(390, 844, { copyBottom: 100 }).hero.S).toBeCloseTo(366 / WIDEST_TOTAL, 9)

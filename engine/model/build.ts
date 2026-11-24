@@ -1,25 +1,35 @@
 import {
+  BackSide,
   BoxGeometry,
-  BufferGeometry,
   CapsuleGeometry,
   CircleGeometry,
   CylinderGeometry,
   Group,
   Mesh,
-  MeshBasicMaterial,
-  MeshLambertMaterial,
-  NoBlending,
   Object3D,
   ShaderMaterial,
-  BackSide,
   SphereGeometry,
   TorusGeometry,
 } from 'three'
+import type { Material, MeshBasicMaterial, MeshLambertMaterial } from 'three'
 import type { Look } from '../look'
-import { buildHair } from './hair'
-import type { PartFactory } from './hair'
+import { applyHair } from './hair'
+import { at, createKit, hide, type Kit } from './kit'
+import { applyOutfit } from './outfits'
 
 export type Arm = { shoulder: Group; elbow: Group; side: -1 | 1 }
+
+/** A swappable layer (hair style, outfit): its own kit, so a swap frees exactly what it replaces. */
+export type Layer = {
+  id: string
+  kit: Kit
+  /** top-level objects this layer added, each removed from its parent on swap */
+  objects: Object3D[]
+  /** hair only: the volume a hat replaces (hidden while a hat is worn) */
+  crown?: Object3D
+  /** outfit only: undoes what it changed on the base body (paint, hidden drawstrings) */
+  undo?: () => void
+}
 
 export type Rig = {
   root: Group
@@ -29,71 +39,54 @@ export type Rig = {
   arms: [Arm, Arm]
   eyes: { smile: Group; open: Group }
   mouth: { smile: Mesh; open: Mesh }
-  /** Empty mount points for outfits (Task 11). */
+  /** Outfit mount points: hat on the face (at the hairline), bow tie at the collar front, a prop per hand. */
   slots: { hat: Group; neck: Group; hands: [Group, Group] }
   /** Action props, scaled to 0 (hidden) until a pose shows them: a phone per hand (selfie), a laptop (deploying). */
   props: { phone: [Group, Group]; laptop: Group }
   bubbleAnchor: Object3D
   /** [skull, torso, hair cap]: the parts the runtime tracks for the grab handle. */
   handleParts: Object3D[]
-  /** Frees every geometry and material this rig created. */
+  /** What it is wearing now (kept in step by applyHair / applyOutfit). */
+  look: Look
+  /** Swappable layers; null until applied. */
+  layers: { hair: Layer | null; outfit: Layer | null }
+  /** Hoodie-coloured materials an outfit may repaint (torso, sleeves); hair-coloured brows and moustache. */
+  paint: { hoodie: MeshLambertMaterial[]; hair: MeshBasicMaterial[] }
+  /** The two drawstring groups (an outfit may hide them). */
+  drawstrings: Group[]
+  /** Shared ink outline material (owned by the base kit). */
+  outline: Material
+  /** Frees every geometry and material this rig created, layers included. */
   dispose(): void
 }
 
-const STRING = '#5f8f5f' // luminance stand-in only; the accent flag (alpha 0.5) selects vermilion, not the colour
-const DARK = '#000000'
 const STUBBLE = '#b98d6a'
 const PROP_DARK = '#2a2a2e'
 const PROP_LIGHT = '#c9c4b8'
 
-/** Props start hidden: zero scale also keeps them out of the silhouette bounds. */
-const hide = (o: Object3D) => {
-  o.scale.setScalar(0)
-  o.visible = false
-}
+const lambertOf = (g: Group) => (g.children[0] as Mesh).material as MeshLambertMaterial
 
-const at = <T extends Object3D>(o: T, x: number, y: number, z: number): T => (o.position.set(x, y, z), o)
-
-/** Builds the character (ported from prototype v12). Only the default hair style is modelled for now. */
+/** Builds the character (ported from prototype v12), then dresses it: hair style and outfit layers. */
 export function buildCharacter(look: Look): Rig {
-  const { hair, hairColor, skin, hoodie } = look.base
-  const geometries = new Set<BufferGeometry>()
-  const materials = new Set<{ dispose(): void }>()
-  const track = <G extends BufferGeometry>(g: G): G => (geometries.add(g), g)
+  const { hairColor, skin, hoodie, glasses } = look.base
 
-  const outlineMat = new ShaderMaterial({
+  const outline = new ShaderMaterial({
     side: BackSide,
     uniforms: { t: { value: 0.035 } },
     vertexShader: 'uniform float t; void main(){ vec3 p = position + normal * t; gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0); }',
     fragmentShader: 'void main(){ gl_FragColor = vec4(0.0,0.0,0.0,1.0); }',
   })
-  materials.add(outlineMat)
-
-  const lambert = (color: string, accent = false): MeshLambertMaterial => {
-    // Accent flag channel: alpha 0.5. Three only forces alpha to 1 for NormalBlending opaque materials,
-    // so NoBlending lets the fragment alpha reach the render target as-is.
-    const m = new MeshLambertMaterial(accent ? { color, opacity: 0.5, blending: NoBlending } : { color })
-    materials.add(m)
-    return m
-  }
-  const dark = (c?: string): MeshBasicMaterial => {
-    const m = new MeshBasicMaterial({ color: c ?? DARK })
-    materials.add(m)
-    return m
-  }
-  const part: PartFactory = (geo, color, { outline = true } = {}) => {
-    track(geo)
-    const g = new Group()
-    g.add(new Mesh(geo, lambert(color)))
-    if (outline) g.add(new Mesh(geo, outlineMat))
-    return g
-  }
-  const mesh = (geo: BufferGeometry, mat: MeshBasicMaterial | MeshLambertMaterial) => new Mesh(track(geo), mat)
+  const kit = createKit(outline)
+  const { part, flat } = kit
+  const hoodiePaint: MeshLambertMaterial[] = []
+  const hoodiePart = (g: Group) => (hoodiePaint.push(lambertOf(g)), g)
+  const hairPaint: MeshBasicMaterial[] = []
+  const hairFlat = (m: Mesh) => (hairPaint.push(m.material as MeshBasicMaterial), m)
 
   const root = new Group()
   const body = new Group()
   root.add(body)
-  const torso = at(part(new CapsuleGeometry(0.9, 1.1, 8, 32), hoodie), 0, -1.05, 0)
+  const torso = hoodiePart(at(part(new CapsuleGeometry(0.9, 1.1, 8, 32), hoodie), 0, -1.05, 0))
   torso.scale.set(1.3, 1, 0.78)
   body.add(torso)
   const collar = at(part(new TorusGeometry(0.42, 0.17, 14, 36), hoodie), 0, 0.42, -0.05)
@@ -105,22 +98,16 @@ export function buildCharacter(look: Look): Rig {
   body.add(hoodBack)
 
   // Drawstrings: the accent parts. The outline meshes stay ink.
+  const drawstrings: Group[] = []
   for (const s of [-1, 1]) {
     const str = at(new Group(), s * 0.16, 0.08, 0.56)
     str.name = 'drawstring'
-    const accentPart = (geo: BufferGeometry) => {
-      track(geo)
-      const g = new Group()
-      const m = new Mesh(geo, lambert(STRING, true))
-      m.userData.accent = true
-      g.add(m, new Mesh(geo, outlineMat))
-      return g
-    }
-    str.add(accentPart(new CylinderGeometry(0.046, 0.046, 0.5, 8)))
-    str.add(at(accentPart(new CylinderGeometry(0.062, 0.062, 0.11, 8)), 0, -0.29, 0))
+    str.add(kit.accent(new CylinderGeometry(0.046, 0.046, 0.5, 8)))
+    str.add(at(kit.accent(new CylinderGeometry(0.062, 0.062, 0.11, 8)), 0, -0.29, 0))
     str.rotation.x = -0.28
     str.rotation.z = s * 0.06
     body.add(str)
+    drawstrings.push(str)
   }
   const neck = at(part(new CylinderGeometry(0.27, 0.3, 0.5, 20), skin), 0, 0.65, 0)
   body.add(neck)
@@ -138,11 +125,8 @@ export function buildCharacter(look: Look): Rig {
     face.add(ear)
   }
 
-  // Only 'wavy-fringe' exists until Task 11; any other style falls back to it.
-  const { cap } = buildHair(hair, face, hairColor, part, at)
-
   for (const s of [-1, 1]) {
-    const brow = at(mesh(new CapsuleGeometry(0.03, 0.2, 4, 8), dark(hairColor)), s * 0.3, 0.27, 0.74)
+    const brow = at(hairFlat(flat(new CapsuleGeometry(0.03, 0.2, 4, 8), hairColor)), s * 0.3, 0.27, 0.74)
     brow.rotation.z = Math.PI / 2 + s * 0.12
     brow.rotation.y = s * 0.35
     face.add(brow)
@@ -150,12 +134,11 @@ export function buildCharacter(look: Look): Rig {
   const eyesSmile = new Group()
   const eyesOpen = new Group()
   face.add(eyesSmile, eyesOpen)
-  const eyeMat = dark()
   for (const s of [-1, 1]) {
-    const arc = at(mesh(new TorusGeometry(0.11, 0.03, 8, 16, Math.PI), eyeMat), s * 0.3, 0.04, 0.77)
+    const arc = at(flat(new TorusGeometry(0.11, 0.03, 8, 16, Math.PI)), s * 0.3, 0.04, 0.77)
     arc.rotation.y = s * 0.35
     eyesSmile.add(arc)
-    const dot = at(mesh(new SphereGeometry(0.075, 12, 10), eyeMat), s * 0.3, 0.06, 0.74)
+    const dot = at(flat(new SphereGeometry(0.075, 12, 10)), s * 0.3, 0.06, 0.74)
     dot.scale.set(0.8, 1.1, 0.5)
     eyesOpen.add(dot)
   }
@@ -163,42 +146,61 @@ export function buildCharacter(look: Look): Rig {
   const nose = at(part(new SphereGeometry(0.11, 16, 12), skin, { outline: false }), 0, -0.13, 0.8)
   nose.scale.set(1, 0.9, 0.8)
   face.add(nose)
-  const noseShadow = at(mesh(new CapsuleGeometry(0.018, 0.07, 4, 8), eyeMat), 0.03, -0.2, 0.83)
+  const noseShadow = at(flat(new CapsuleGeometry(0.018, 0.07, 4, 8)), 0.03, -0.2, 0.83)
   noseShadow.rotation.z = Math.PI / 2
   face.add(noseShadow)
   for (const s of [-1, 1]) {
-    const m = at(mesh(new CapsuleGeometry(0.022, 0.15, 4, 8), dark(hairColor)), s * 0.1, -0.26, 0.79)
+    const m = at(hairFlat(flat(new CapsuleGeometry(0.022, 0.15, 4, 8), hairColor)), s * 0.1, -0.26, 0.79)
     m.rotation.z = Math.PI / 2 - s * 0.28
     face.add(m)
   }
-  const stubble = at(mesh(new SphereGeometry(0.45, 24, 16), lambert(STUBBLE)), 0, -0.56, 0.46)
+  const stubble = at(kit.lit(new SphereGeometry(0.45, 24, 16), STUBBLE), 0, -0.56, 0.46)
   stubble.scale.set(1, 0.55, 0.5)
   face.add(stubble)
-  const mouthSmile = at(mesh(new TorusGeometry(0.17, 0.028, 8, 18, Math.PI), eyeMat), 0, -0.36, 0.74)
+  const mouthSmile = at(flat(new TorusGeometry(0.17, 0.028, 8, 18, Math.PI)), 0, -0.36, 0.74)
   mouthSmile.rotation.z = Math.PI
   face.add(mouthSmile)
-  const mouthOpen = at(mesh(new CircleGeometry(0.17, 20, Math.PI, Math.PI), eyeMat), 0, -0.38, 0.745)
+  const mouthOpen = at(flat(new CircleGeometry(0.17, 20, Math.PI, Math.PI)), 0, -0.38, 0.745)
   mouthOpen.visible = false
   face.add(mouthOpen)
+
+  // Glasses (dress-up option, spec §7.6): round ink rims over the eyes, a bridge, arms back to the ears.
+  if (glasses) {
+    const specs = new Group()
+    specs.name = 'glasses'
+    for (const s of [-1, 1]) {
+      const rim = at(flat(new TorusGeometry(0.17, 0.028, 8, 28)), s * 0.3, 0.05, 0.8)
+      rim.rotation.y = s * 0.35
+      specs.add(rim)
+      const arm = at(flat(new BoxGeometry(0.03, 0.03, 0.62)), s * 0.74, 0.08, 0.38)
+      arm.rotation.y = s * 0.18
+      specs.add(arm)
+    }
+    const bridge = at(flat(new CapsuleGeometry(0.022, 0.12, 4, 8)), 0, 0.09, 0.86)
+    bridge.rotation.z = Math.PI / 2
+    specs.add(bridge)
+    face.add(specs)
+  }
 
   const bubbleAnchor = at(new Object3D(), -0.6, 1.45, 0)
   face.add(bubbleAnchor)
 
-  // Outfit mount points (empty until Task 11).
-  const hat = at(new Group(), 0, 0.85, 0)
+  // Outfit mount points. Hat: at the hairline, tipped back a little; neck: in front of the hoodie collar.
+  const hat = at(new Group(), 0, 0.5, 0)
+  hat.rotation.x = -0.1
   hat.name = 'slot-hat'
   face.add(hat)
-  const neckSlot = at(new Group(), 0, 0.42, 0.3)
+  const neckSlot = at(new Group(), 0, 0.43, 0.6)
   neckSlot.name = 'slot-neck'
   body.add(neckSlot)
 
   const makeArm = (side: -1 | 1): { arm: Arm; handSlot: Group; phone: Group } => {
     const shoulder = at(new Group(), side * 1.0, 0.05, 0)
     body.add(shoulder)
-    shoulder.add(at(part(new CapsuleGeometry(0.27, 0.6, 6, 16), hoodie), 0, -0.45, 0))
+    shoulder.add(hoodiePart(at(part(new CapsuleGeometry(0.27, 0.6, 6, 16), hoodie), 0, -0.45, 0)))
     const elbow = at(new Group(), 0, -0.95, 0)
     shoulder.add(elbow)
-    elbow.add(at(part(new CapsuleGeometry(0.25, 0.5, 6, 16), hoodie), 0, -0.4, 0))
+    elbow.add(hoodiePart(at(part(new CapsuleGeometry(0.25, 0.5, 6, 16), hoodie), 0, -0.4, 0)))
     const hand = at(new Group(), 0, -0.86, 0.02)
     elbow.add(hand)
     const palm = part(new SphereGeometry(0.22, 18, 14), skin)
@@ -235,7 +237,7 @@ export function buildCharacter(look: Look): Rig {
   hide(laptop)
   body.add(laptop)
 
-  return {
+  const rig: Rig = {
     root,
     body,
     head,
@@ -246,10 +248,20 @@ export function buildCharacter(look: Look): Rig {
     slots: { hat, neck: neckSlot, hands: [a0.handSlot, a1.handSlot] },
     props: { phone: [a0.phone, a1.phone], laptop },
     bubbleAnchor,
-    handleParts: [skull, torso, cap],
+    handleParts: [skull, torso, skull],
+    look: { base: { ...look.base }, outfit: 'hoodie' },
+    layers: { hair: null, outfit: null },
+    paint: { hoodie: hoodiePaint, hair: hairPaint },
+    drawstrings,
+    outline,
     dispose() {
-      geometries.forEach((g) => g.dispose())
-      materials.forEach((m) => m.dispose())
+      rig.layers.hair?.kit.dispose()
+      rig.layers.outfit?.kit.dispose()
+      kit.dispose()
+      outline.dispose()
     },
   }
+  applyHair(rig, look.base.hair, hairColor)
+  applyOutfit(rig, look.outfit)
+  return rig
 }

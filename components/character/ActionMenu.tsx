@@ -29,7 +29,7 @@ const PILL_CLEARANCE = 62
 const REACTION_MS = 3000
 
 /** Where the button and menu sit: on the bottom edge, beside his resting silhouette, on the room side. */
-type Anchor = { side: 'left' | 'right'; offset: number; badge: boolean }
+type Anchor = { side: 'left' | 'right'; offset: number; badge: boolean; lift: number }
 
 /** Gap to his silhouette and to the window edge (CSS px). */
 const gapFor = (W: number) => (W <= 900 ? 16 : 24)
@@ -37,14 +37,15 @@ const gapFor = (W: number) => (W <= 900 ? 16 : 24)
 function anchorFor(p: PlaceInfo, buttonW: number): Anchor {
   const gap = gapFor(p.W)
   const badge = p.kind === 'badge'
+  const lift = p.lift // his floor above the window's bottom (dress-up stage on phones): sit on it too
   // He stands right of centre (or centred): the button goes on his left, else on his right.
   if ((p.left + p.right) / 2 >= p.W / 2) {
     const room = p.left - gap - buttonW >= gap
     // No room beside him (phones: he is centred and wide): the corner on his right, over his sleeve.
-    return { side: 'right', offset: room ? p.W - p.left + gap : gap, badge }
+    return { side: 'right', offset: room ? p.W - p.left + gap : gap, badge, lift }
   }
   const room = p.W - p.right - gap - buttonW >= gap
-  return { side: 'left', offset: room ? p.right + gap : gap, badge }
+  return { side: 'left', offset: room ? p.right + gap : gap, badge, lift }
 }
 
 /**
@@ -117,7 +118,7 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
     const width = m.offsetWidth
     const height = m.offsetHeight
     // Always written (React leaves an unchanged style prop alone, so a stale fit would stick).
-    const bottom = edge + (anchor.badge ? 0 : PILL_CLEARANCE)
+    const bottom = edge + anchor.lift + (anchor.badge ? 0 : PILL_CLEARANCE)
     m.style.bottom = `${bottom + height > H - edge ? Math.max(edge, H - edge - height) : bottom}px`
     m.style[anchor.side] = `${Math.max(edge, Math.min(anchor.offset, W - edge - width))}px`
   }, [open, anchor])
@@ -179,7 +180,9 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
 
   const badge = anchor?.badge ?? false
   const pos = (extraBottom: number): CSSProperties | undefined =>
-    anchor ? { [anchor.side]: `${anchor.offset}px`, bottom: `calc(var(--char-edge) + ${extraBottom}px)` } : undefined
+    anchor
+      ? { [anchor.side]: `${anchor.offset}px`, bottom: `calc(var(--char-edge) + ${anchor.lift + extraBottom}px)` }
+      : undefined
 
   return (
     <>

@@ -1,4 +1,5 @@
 import { elbowTarget } from './arms'
+import type { Object3D } from 'three'
 import type { Rig } from './model/build'
 import type { Pose } from './poses'
 
@@ -27,7 +28,7 @@ const dampAngle = (a: number, b: number, k: number, dt: number) => {
   return damp(a, a + d, k, dt)
 }
 
-function showProp(o: Rig['props']['laptop'], target: number, dt: number) {
+function showProp(o: Object3D, target: number, dt: number) {
   const s = damp(o.scale.x, target, 18, dt)
   const v = s < 0.02 ? 0 : s
   o.scale.setScalar(v)
@@ -58,4 +59,31 @@ export function applyPose(rig: Rig, pose: Pose, dt: number, look: LookInput = NO
   showProp(props.phone[0], pose.phone?.[0] ?? 0, dt)
   showProp(props.phone[1], pose.phone?.[1] ?? 0, dt)
   showProp(props.laptop, pose.laptop ?? 0, dt)
+  // An outfit's hand prop (wrench, magnifier) steps aside while that hand holds the phone or types.
+  rig.slots.hands.forEach((h, i) => showProp(h, 1 - Math.max(pose.phone?.[i] ?? 0, pose.laptop ?? 0), dt))
+}
+
+/** Carries the pose of `from` over to a freshly built `to` (a look change rebuilds the rig mid-motion). */
+export function copyPose(from: Rig, to: Rig) {
+  const copy = (a: Object3D, b: Object3D) => {
+    b.position.copy(a.position)
+    b.rotation.copy(a.rotation)
+    b.scale.copy(a.scale)
+    b.visible = a.visible
+  }
+  to.root.position.copy(from.root.position)
+  to.root.scale.copy(from.root.scale)
+  copy(from.body, to.body)
+  copy(from.head, to.head)
+  from.arms.forEach((a, i) => {
+    copy(a.shoulder, to.arms[i].shoulder)
+    copy(a.elbow, to.arms[i].elbow)
+  })
+  copy(from.eyes.smile, to.eyes.smile)
+  copy(from.eyes.open, to.eyes.open)
+  to.mouth.smile.visible = from.mouth.smile.visible
+  to.mouth.open.visible = from.mouth.open.visible
+  from.props.phone.forEach((p, i) => copy(p, to.props.phone[i]))
+  copy(from.props.laptop, to.props.laptop)
+  from.slots.hands.forEach((h, i) => copy(h, to.slots.hands[i]))
 }
