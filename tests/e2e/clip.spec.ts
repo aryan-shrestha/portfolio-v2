@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test'
-import { startSampling, stopSampling, type Sample } from './sampling'
+import { expect, test, type Page } from '@playwright/test'
+import { expectInside, sampledFrames, screenshotEdges, showPage, startSampling, stopSampling, widest, type Sample } from './sampling'
 
 /**
  * Clip regression for every outfit × hair style (spec §7.6, §10; review fix): idle, panic, cheer and
@@ -52,13 +52,8 @@ for (const vp of [
         let frames = 0
         const check = (label: string, samples: Sample[]) => {
           // every rendered frame is sampled; under parallel software GL a frame can take ~100 ms
-          expect(samples.length, `${label}: frames sampled`).toBeGreaterThanOrEqual(4)
+          expectInside(label, samples, W)
           frames += samples.length
-          samples.forEach(([minX, maxX, top], i) => {
-            expect(minX, `${label} frame ${i} left`).toBeGreaterThanOrEqual(0)
-            expect(maxX, `${label} frame ${i} right`).toBeLessThanOrEqual(W)
-            expect(top, `${label} frame ${i} top`).toBeGreaterThanOrEqual(0)
-          })
         }
         for (const hair of HAIR) {
           await page.evaluate(
@@ -71,7 +66,7 @@ for (const vp of [
           )
           await page.waitForFunction((o) => (window as EngineWindow).__engine!.debugState().outfit === o, outfit)
           await startSampling(page)
-          await page.waitForTimeout(800)
+          await sampledFrames(page, 8)
           check(`${hair} idle`, await stopSampling(page))
           for (const [move, seconds] of MOVES) {
             await startSampling(page)
@@ -82,3 +77,150 @@ for (const vp of [
         }
         test.info().annotations.push({ type: 'frames', description: String(frames) })
       })
+
+/**
+ * The full clip matrix (spec §10a; R15): 7 viewports × {idle, each of the 12 actions, a mouse drag to
+ * each corner and 300 px beyond, dance pinned to the left and the right edge}. Every frame is sampled
+ * (silhouette + the canvas's own edge dots); then the widest moment of each viewport is replayed under a
+ * screenshot scan of the window's edge column/row, to catch outline or dither overreach past Box3.
+ */
+const VIEWPORTS = [
+  { width: 1920, height: 1080 },
+  { width: 1440, height: 900 },
+  { width: 1280, height: 600 },
+  { width: 1024, height: 768 },
+  { width: 768, height: 1024 },
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+]
+const ACTIONS: [string, number][] = [
+  ['wave', 2.2],
+  ['dance', 4],
+  ['panic', 2.6],
+  ['fly', 3.2],
+  ['vanish', 2.6],
+  ['hiccup', 2.6],
+  ['peekaboo', 3],
+  ['selfie', 3],
+  ['dizzy', 3.4],
+  ['sneeze', 2.8],
+  ['sulk', 3.4],
+  ['deploying', 4],
+]
+type MatrixWindow = Window & {
+  __engine?: { debugState(): { action: string | null; placement: string }; play(a: string): void }
+}
+const ready = async (page: Page) => {
+  await page.waitForFunction(() => !!(window as MatrixWindow).__engine, null, { timeout: 8000 })
+  await page.waitForFunction(() => (window as MatrixWindow).__engine!.debugState().action === null, null, { timeout: 8000 })
+}
+const clientW = (page: Page) => page.evaluate(() => document.documentElement.clientWidth)
+async function playSampled(page: Page, action: string, seconds: number) {
+  await startSampling(page)
+  await page.evaluate((a) => (window as MatrixWindow).__engine!.play(a), action)
+  await page.waitForTimeout(seconds * 1000 + 400)
+  return stopSampling(page)
+}
+/** Replays `action` and scans the screenshot edges every ~120 ms over its duration: zero character pixels. */
+async function scanWhilePlaying(page: Page, action: string, seconds: number, label: string) {
+  await page.evaluate((a) => (window as MatrixWindow).__engine!.play(a), action)
+  const end = Date.now() + seconds * 1000
+  let shots = 0
+  while (Date.now() < end) {
+    const e = await screenshotEdges(page)
+    expect(e, `${label}: screenshot pixels of him on the [left, right, top] edge (shot ${shots})`).toEqual({
+      left: 0,
+      right: 0,
+      top: 0,
+    })
+    shots++
+    await page.waitForTimeout(120)
+  }
+  await showPage(page)
+  return shots
+}
+
+for (const vp of VIEWPORTS) {
+  const name = `${vp.width}×${vp.height}`
+
+  test(`matrix ${name}: idle and each of the 12 actions, every frame inside; edge screenshots at the widest`, async ({
+    page,
+  }) => {
+    test.setTimeout(150_000)
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await ready(page)
+    const W = await clientW(page)
+    await startSampling(page)
+    await sampledFrames(page, 8)
+    expectInside(`${name} idle`, await stopSampling(page), W)
+    let wide: [string, number, number] = ['idle', 0, 0]
+    for (const [a, sec] of ACTIONS) {
+      const samples = await playSampled(page, a, sec)
+      expectInside(`${name} ${a}`, samples, W)
+      const w = samples[widest(samples)]
+      if (w[1] - w[0] > wide[2]) wide = [a, sec, w[1] - w[0]]
+      await ready(page)
+    }
+    const shots = await scanWhilePlaying(page, wide[0], wide[1], `${name} widest (${wide[0]})`)
+    test.info().annotations.push({ type: 'widest', description: `${wide[0]} ${wide[2].toFixed(0)} px, ${shots} edge shots` })
+  })
+
+  test(`matrix ${name}: dragged to each corner and 300 px beyond, every frame inside`, async ({ page }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await ready(page)
+    const W = await clientW(page)
+    const H = vp.height
+    const handle = page.locator('[data-char="handle"]')
+    for (const [cx, cy, corner] of [
+      [0, 0, 'top-left'],
+      [W, 0, 'top-right'],
+      [0, H, 'bottom-left'],
+      [W, H, 'bottom-right'],
+    ] as const) {
+      const box = (await handle.boundingBox())!
+      const x = box.x + box.width / 2
+      const y = box.y + box.height / 2
+      await startSampling(page)
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      await page.mouse.move(cx, cy, { steps: 12 })
+      const bx = cx === 0 ? -300 : W + 300
+      const by = cy === 0 ? -300 : H + 300
+      await page.mouse.move(bx, by, { steps: 8 })
+      await page.waitForTimeout(300)
+      await page.mouse.up()
+      await page.waitForTimeout(1300) // the spring back
+      expectInside(`${name} drag ${corner}`, await stopSampling(page), W)
+      await page.keyboard.press('Escape')
+    }
+  })
+
+  test(`matrix ${name}: dance pinned to the left and the right edge, every frame inside; edge screenshots`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await ready(page)
+    const W = await clientW(page)
+    // About is `left`, chapter 2 is `right`: dance's ±2.8 swing runs into the margin and the clamp holds him.
+    for (const [section, place] of [
+      [1, 'left'],
+      [3, 'right'],
+    ] as const) {
+      await page.evaluate((i) => {
+        const s = document.querySelectorAll<HTMLElement>('main > section')[i]
+        window.scrollTo(0, s.offsetTop + innerHeight * 0.3)
+      }, section)
+      await expect.poll(() => page.evaluate(() => (window as MatrixWindow).__engine!.debugState().placement)).toBe(place)
+      await ready(page)
+      const samples = await playSampled(page, 'dance', 4)
+      expectInside(`${name} dance pinned ${place}`, samples, W)
+      await ready(page)
+      await scanWhilePlaying(page, 'dance', 2, `${name} dance pinned ${place}`)
+    }
+  })
+}
