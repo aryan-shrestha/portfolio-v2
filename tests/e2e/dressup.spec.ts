@@ -61,8 +61,10 @@ for (const vp of [
     const stage = (await page.locator('[data-stage]').boundingBox())!
     const panel = (await page.getByRole('region', { name: 'Pick a look' }).boundingBox())!
     const rest = await debug(page)
-    // centred on the stage area, his top inside it
-    expect(Math.abs((rest.minX + rest.maxX) / 2 - (stage.x + stage.width / 2))).toBeLessThan(0.1 * stage.width)
+    // centred on the stage area, or (narrow stage) stepped left by up to (16 + PILL_W) / 2 = 70 px so the
+    // "Play with me" pill fits beside him (engine/placement `aside`); his top inside it
+    const off = stage.x + stage.width / 2 - (rest.minX + rest.maxX) / 2
+    expect(Math.min(Math.abs(off), Math.abs(off - 70))).toBeLessThan(0.1 * stage.width)
     expect(rest.top).toBeGreaterThanOrEqual(stage.y)
     if (panel.x > stage.x + stage.width / 2)
       expect(rest.maxX).toBeLessThanOrEqual(panel.x) // side panel

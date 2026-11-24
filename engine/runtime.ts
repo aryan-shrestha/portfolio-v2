@@ -3,7 +3,14 @@ import { containShift } from './contain'
 import { DEFAULT_LOOK, type Look } from './look'
 import { buildCharacter, type Rig } from './model/build'
 import { applyOutfit } from './model/outfits'
-import { computePlacements, placementAt, smootherstep, type PlacementState, type StageRect } from './placement'
+import {
+  IDLE_REACH,
+  computePlacements,
+  placementAt,
+  smootherstep,
+  type PlacementState,
+  type StageRect,
+} from './placement'
 import { applyPose, copyPose } from './pose-rig'
 import { DURATION, KEY_T, hasPose, poseFor, type Pose, type PoseKind } from './poses'
 import { QUIPS } from './quips'
@@ -22,8 +29,6 @@ const GESTURES = new Set<string>(['wave', 'point', 'thumbs', 'think', 'cheer'])
 const BLEND = 0.6
 /** Movement under this many px is a poke, not a drag (spec §7.3). */
 const POKE_PX = 6
-/** Half the idle silhouette width, model units (spec §7.5.2): where his sides are at rest. */
-const REST_HALF = 1.74
 /** Spring back to the placement: k = 60, c = 11 (prototype v12), integrated in small steps. */
 const K = 60
 const C = 11
@@ -196,7 +201,8 @@ export function createEngine(): EngineAPI {
         if (copy) copyBottom = Math.max(copyBottom ?? 0, copy.getBoundingClientRect().bottom - s.el.getBoundingClientRect().top)
       }
     }
-    P = computePlacements(W, H, { copyBottom, stage: stageRect })
+    // With WebGL the "Play with me" pill stands beside him (none in the no-WebGL still mode).
+    P = computePlacements(W, H, { copyBottom, stage: stageRect, pill: gl })
     for (const s of sections) s.top = s.el.getBoundingClientRect().top + window.scrollY
     topsDirty = false
     // Case pages reserve a gutter of 0.85 × hero S × 3.5 (spec §6.6).
@@ -238,8 +244,8 @@ export function createEngine(): EngineAPI {
   function notifyPlace(kind: PlacementKind, shown = true) {
     const p = P[kind]
     const badge = kind === 'badge' && p.d !== undefined && p.cx !== undefined
-    const left = badge ? W / 2 + p.cx! - p.d! / 2 : W / 2 + p.x - REST_HALF * p.S
-    const right = badge ? W / 2 + p.cx! + p.d! / 2 : W / 2 + p.x + REST_HALF * p.S
+    const left = badge ? W / 2 + p.cx! - p.d! / 2 : W / 2 + p.x - IDLE_REACH * p.S
+    const right = badge ? W / 2 + p.cx! + p.d! / 2 : W / 2 + p.x + IDLE_REACH * p.S
     const lift = p.floor === undefined ? 0 : Math.max(0, H / 2 + p.floor)
     const area: [number, number] = kind === 'stage' && stageRect ? [stageRect.left, stageRect.right] : [0, W]
     if (

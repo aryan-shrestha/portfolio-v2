@@ -42,13 +42,14 @@ function anchorFor(p: PlaceInfo, buttonW: number): Anchor {
   // The area he stands in: the window, or the dress-up stage beside its controls.
   const [a0, a1] = p.area
   // He stands right of the area's centre (or centred): the button goes on his left, else on his right.
+  // Phones: where a centred place leaves no room, the engine steps him left so it fits on his right
+  // (engine/placement `aside`).
+  const corner = { side: 'right' as const, offset: p.W - a1 + gap, badge, lift, shown }
   if ((p.left + p.right) / 2 >= (a0 + a1) / 2) {
-    const room = p.left - gap - buttonW >= a0 + gap
-    // No room beside him (phones: he is centred and wide): the area's corner on his right, over his sleeve.
-    return { side: 'right', offset: room ? p.W - p.left + gap : p.W - a1 + gap, badge, lift, shown }
+    // last resort (no room either side): the area's corner on his right
+    return p.left - gap - buttonW >= a0 + gap ? { ...corner, offset: p.W - p.left + gap } : corner
   }
-  const room = a1 - p.right - gap - buttonW >= gap
-  return { side: 'left', offset: room ? p.right + gap : a0 + gap, badge, lift, shown }
+  return a1 - p.right - gap - buttonW >= gap ? { side: 'left', offset: p.right + gap, badge, lift, shown } : corner
 }
 
 /**

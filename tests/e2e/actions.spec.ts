@@ -181,6 +181,29 @@ for (const vp of [
   })
 }
 
+// Phones: he steps aside so the pill stands beside him, never over his sleeve (hero, outro, dress-up stage).
+for (const [path, vp] of [
+  ['/', { width: 390, height: 844 }],
+  ['/', { width: 360, height: 640 }],
+  ['/dress-up', { width: 390, height: 844 }],
+  ['/dress-up', { width: 360, height: 640 }],
+] as const) {
+  test(`"Play with me" stands clear of him on ${path} at ${vp.width}×${vp.height}`, async ({ page }) => {
+    await page.setViewportSize(vp)
+    await page.goto(path)
+    await engineReady(page)
+    await idle(page)
+    await page.waitForTimeout(800) // settled on his place, the pill beside him
+    const d = await debug(page)
+    const b = (await page.getByRole('button', { name: 'Play with me' }).boundingBox())!
+    const H = vp.height
+    const him = { x: d.minX, y: d.top, width: d.maxX - d.minX, height: H - d.top }
+    expect(overlaps(b, him), `pill ${JSON.stringify(b)} vs silhouette ${JSON.stringify(him)}`).toBe(false)
+    expect(b.x + b.width).toBeLessThanOrEqual(vp.width - 16 + 0.5)
+    expect(d.minX).toBeGreaterThanOrEqual(0)
+  })
+}
+
 // R13: on phones no pixel may touch the left, right or top edge, on any frame — the widest poses
 // (panic, cheer, dance), taps on the handle (never the carried pose) and a real press-drag.
 for (const vp of [
@@ -282,7 +305,8 @@ test('dress-up: curly-top + detective persist across a reload, and he wears them
   await expect(page.getByRole('button', { name: 'Detective', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('button', { name: 'Wavy fringe', exact: true })).toHaveAttribute('aria-pressed', 'false')
   await expect.poll(async () => (await lookDebug(page)).outfit).toBe('detective')
-  expect((await lookDebug(page)).placement).toBe('stage')
+  // the stored look can apply a frame before the route's sections register: wait for the stage
+  await expect.poll(async () => (await lookDebug(page)).placement).toBe('stage')
   expect(errors()).toEqual([])
 })
 

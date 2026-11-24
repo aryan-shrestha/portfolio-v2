@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   BOX,
+  BUBBLE_H,
+  IDLE_REACH,
+  PILL_W,
+  REST_HALF,
   STAGE_CUT,
   STAGE_PAD,
   WIDEST_TOTAL,
@@ -80,14 +84,48 @@ describe('computePlacements phone 390x844', () => {
     expect(P.badge.cx).toBe(-195 + 16 + 56)
     expect(P.badge.cy).toBe(-422 + 16 + 56)
   })
-  it('copyBottom caps hero so the silhouette top clears the copy by 12px', () => {
-    const Q = computePlacements(390, 844, { copyBottom: 600 })
+  it('copyBottom caps hero so the silhouette top and the greeting bubble above it clear the copy by 12px', () => {
+    const Q = computePlacements(390, 844, { copyBottom: 520 })
     const top = 844 / 2 - (Q.hero.y + BOX.y1 * Q.hero.S)
-    expect(top).toBeGreaterThanOrEqual(612 - 1e-9)
-    expect(Q.hero.S).toBeCloseTo((844 - 612) / (BOX.y1 + 1.5), 9)
+    expect(top - BUBBLE_H).toBeGreaterThanOrEqual(532 - 1e-9)
+    expect(Q.hero.S).toBeCloseTo((844 - 532 - BUBBLE_H) / (BOX.y1 + 1.5), 9)
   })
   it('copyBottom does not change a hero that already clears the copy', () => {
     expect(computePlacements(390, 844, { copyBottom: 100 }).hero.S).toBeCloseTo(366 / WIDEST_TOTAL, 9)
+  })
+})
+
+describe('room for the "Play with me" pill (phones)', () => {
+  // left: his rest width (containment covers a head turned that way); right: his reach toward the pill
+  const restSides = (x: number, S: number, W: number) => [W / 2 + x - REST_HALF * S, W / 2 + x + IDLE_REACH * S]
+  for (const [W, H] of [
+    [390, 844],
+    [360, 640],
+  ]) {
+    it(`${W}×${H}: hero steps left so the pill fits between his reach and the edge's 16px margin`, () => {
+      const P = computePlacements(W, H, { pill: true })
+      const [l, r] = restSides(P.hero.x, P.hero.S, W)
+      expect(P.hero.x).toBeLessThan(0)
+      expect(l).toBeGreaterThanOrEqual(16 - 1e-9)
+      expect(W - 16 - PILL_W - r).toBeGreaterThanOrEqual(0)
+      expect(P.outro.x).toBe(P.hero.x)
+      expect(computePlacements(W, H).hero.x).toBe(0) // no pill (no WebGL): centred
+    })
+  }
+  it('dress-up stage band on a phone: steps left the same way', () => {
+    const P = computePlacements(390, 844, { pill: true, stage: { left: 0, top: 80, right: 390, bottom: 420 } })
+    const [l, r] = restSides(P.stage.x, P.stage.S, 390)
+    expect(l).toBeGreaterThanOrEqual(16 - 1e-9)
+    expect(390 - 16 - PILL_W - r).toBeGreaterThanOrEqual(0)
+  })
+  it('no step where the pill already fits beside him (desktop hero, tablets, the desktop stage)', () => {
+    expect(computePlacements(1440, 900, { pill: true }).hero.x).toBe(computePlacements(1440, 900).hero.x)
+    expect(computePlacements(768, 1024, { pill: true }).hero.x).toBe(0)
+    expect(computePlacements(1440, 900, { pill: true, stage: { left: 0, top: 220, right: 1000, bottom: 900 } }).stage.x).toBeCloseTo(-220, 9)
+  })
+  it('never pushes him closer than 16px to the left edge (320 px: as far as it can)', () => {
+    const P = computePlacements(320, 568, { pill: true })
+    expect(restSides(P.hero.x, P.hero.S, 320)[0]).toBeGreaterThanOrEqual(16 - 1e-9)
   })
 })
 
