@@ -1,6 +1,7 @@
 import { Box3, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOOK } from '@/engine/look'
+import { WIDEST_TOTAL } from '@/engine/placement'
 import { buildCharacter } from '@/engine/model/build'
 import { applyPose } from '@/engine/pose-rig'
 import { DURATION, hasPose, poseFor, type Pose, type PoseCtx, type PoseKind } from '@/engine/poses'
@@ -167,8 +168,9 @@ describe('new actions read as what they are', () => {
 
 describe('new actions stay inside the containment budget (spec §7.5)', () => {
   // Frame by frame at 60 fps from a settled idle, as the runtime damps it (elbows fold mid-swing).
-  // Hard budget: total width ≤ 5.75 (phones size to it). Per side, a raise briefly passes ±2.6 the
-  // same way the ported wave and cheer do (≈ 3.1 here); the runtime nudges him inward (§7.5.1).
+  // Total width is checked for every kind below (WIDEST_TOTAL); the new actions keep to 5.75, the
+  // old phone budget. Per side, a raise briefly passes ±2.6 the same way the ported wave and cheer do
+  // (≈ 3.1 here); the runtime nudges him inward (§7.5.1).
   const settled = (k: Action, t: number) => t > 0.6 && t < DURATION[k] - 0.6
   for (const k of NEW) {
     it(`${k}: width ≤ 5.75, sides ≤ 3.15 in swings, top within 3.05 (+ lift)`, () => {
@@ -204,6 +206,37 @@ describe('new actions stay inside the containment budget (spec §7.5)', () => {
         }
       }
     }
+  })
+})
+
+describe('WIDEST_TOTAL covers every pose (R13, spec §7.5.2/§7.5.4)', () => {
+  // Every kind, simulated at 60 fps from a settled idle with the runtime's damping and elbow fold,
+  // both sides, through the return to idle. Drag sweeps its velocity tilt (±0.3) for 3 s.
+  const KINDS: PoseKind[] = ['idle', 'drag', ...(Object.keys(DURATION) as (Action | Gesture)[])]
+  const widest = (k: PoseKind) => {
+    let w = 0
+    for (const toward of [1, -1] as const) {
+      const rig = buildCharacter(DEFAULT_LOOK)
+      applyPose(rig, poseFor('idle', 0, { ...ctx, toward }), Infinity)
+      const len = k === 'idle' || k === 'drag' ? 3 : DURATION[k] + 0.8
+      for (let f = 0; f * DT <= len; f++) {
+        const t = f * DT
+        applyPose(rig, poseFor(k, t, { now: t, toward, vx: k === 'drag' ? 40 * Math.sin(t * 2) : 0 }), DT)
+        rig.root.updateMatrixWorld(true)
+        const b = new Box3().setFromObject(rig.root, true)
+        w = Math.max(w, b.max.x - b.min.x)
+      }
+    }
+    return w
+  }
+  for (const k of KINDS) {
+    it(`${k}: widest total silhouette ≤ WIDEST_TOTAL`, () => {
+      expect(widest(k)).toBeLessThanOrEqual(WIDEST_TOTAL)
+    })
+  }
+  it('WIDEST_TOTAL is the measured maximum + 0.1 margin, rounded up to 0.05 (not padded beyond that)', () => {
+    const max = Math.max(...KINDS.map(widest))
+    expect(WIDEST_TOTAL).toBeCloseTo(Math.ceil((max + 0.1) / 0.05) * 0.05, 9)
   })
 })
 

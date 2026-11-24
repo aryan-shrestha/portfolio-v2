@@ -22,6 +22,10 @@ const ITEMS: readonly { id: Action; label: string }[] = [
 ]
 const TITLE = 'Make me do a thing'
 const POKE_MS = 2500
+/** Rows to try, tallest first; the list fills columns top to bottom. */
+const ROWS = [6, 4, 3, 2] as const
+/** The menu's bottom sits this far above the pill's bottom (pill height + gap). */
+const PILL_CLEARANCE = 62
 const REACTION_MS = 3000
 
 /** Where the button and menu sit: on the bottom edge, beside his resting silhouette, on the room side. */
@@ -53,6 +57,7 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
   const [anchor, setAnchor] = useState<Anchor | null>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   /** Where focus goes when the menu closes (the pill, or whatever had focus before a poke). */
   const returnTo = useRef<HTMLElement | null>(null)
@@ -82,13 +87,39 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
     [engine],
   )
 
-  // Keep the bubble inside the window: it is wider than the pill it sits over.
+  // Fit the bubble inside the window. Short or landscape screens: more columns (6 → 4 → 3 → 2 rows) while
+  // the width allows, then drop it toward the bottom edge (over the pill), and scroll only as a last resort.
   useLayoutEffect(() => {
     const m = menuRef.current
-    if (!open || !m || !anchor) return
-    const edge = gapFor(window.innerWidth)
-    const max = document.documentElement.clientWidth - edge - m.getBoundingClientRect().width
-    if (anchor.offset > max) m.style[anchor.side] = `${Math.max(edge, max)}px`
+    const list = listRef.current
+    if (!open || !m || !list || !anchor) return
+    const W = document.documentElement.clientWidth
+    const H = window.innerHeight
+    const edge = gapFor(W)
+    // layout sizes (offset*), not the rect: the enter animation scales the bubble while we measure
+    const fitsH = () => m.offsetHeight <= H - 2 * edge
+    m.style.maxHeight = m.style.overflowY = ''
+    let rows: number = ROWS[0]
+    list.style.setProperty('--rows', String(rows))
+    for (const r of ROWS.slice(1)) {
+      if (fitsH()) break
+      list.style.setProperty('--rows', String(r))
+      if (m.offsetWidth > W - 2 * edge) {
+        list.style.setProperty('--rows', String(rows)) // too wide: keep the previous layout
+        break
+      }
+      rows = r
+    }
+    if (!fitsH()) {
+      m.style.maxHeight = `${H - 2 * edge}px`
+      m.style.overflowY = 'auto'
+    }
+    const width = m.offsetWidth
+    const height = m.offsetHeight
+    // Always written (React leaves an unchanged style prop alone, so a stale fit would stick).
+    const bottom = edge + (anchor.badge ? 0 : PILL_CLEARANCE)
+    m.style.bottom = `${bottom + height > H - edge ? Math.max(edge, H - edge - height) : bottom}px`
+    m.style[anchor.side] = `${Math.max(edge, Math.min(anchor.offset, W - edge - width))}px`
   }, [open, anchor])
 
   // Opening moves focus to the first action.
@@ -174,13 +205,13 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
           ref={menuRef}
           className="char-menu"
           data-side={anchor.side}
-          style={pos(badge ? 0 : 62)}
+          style={pos(badge ? 0 : PILL_CLEARANCE)}
           onKeyDown={onMenuKey}
         >
           <p id={titleId} className="char-menu-title">
             {TITLE}
           </p>
-          <div id={menuId} role="menu" aria-labelledby={titleId} className="char-menu-list">
+          <div ref={listRef} id={menuId} role="menu" aria-labelledby={titleId} className="char-menu-list">
             {ITEMS.map((it, i) => (
               <button
                 key={it.id}

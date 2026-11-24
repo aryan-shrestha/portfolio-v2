@@ -261,7 +261,7 @@ body {
 }
 .char-menu-list {
   display: grid;
-  grid-template-rows: repeat(6, auto);
+  grid-template-rows: repeat(var(--rows, 6), auto); /* fewer rows, more columns on short screens */
   grid-auto-flow: column; /* reads (and arrows) down the first column, then the second */
   gap: 2px 4px;
 }

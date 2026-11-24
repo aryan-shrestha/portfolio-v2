@@ -45,8 +45,9 @@ describe('computePlacements desktop 1440x900', () => {
 
 describe('computePlacements phone 390x844', () => {
   const P = computePlacements(390, 844)
-  it('hero S = min(0.42H/4.55, (W-24)/5.75), centred', () => {
-    expect(P.hero.S).toBeCloseTo(63.65, 2)
+  it('hero S = min(0.42H/4.55, (W-24)/WIDEST_TOTAL), centred', () => {
+    expect(WIDEST_TOTAL).toBe(6.35)
+    expect(P.hero.S).toBeCloseTo(366 / WIDEST_TOTAL, 9) // 57.64
     expect(P.hero.x).toBe(0)
     expect(P.hero.y + -1.5 * P.hero.S).toBeCloseTo(-422, 6)
   })
@@ -66,7 +67,7 @@ describe('computePlacements phone 390x844', () => {
     expect(Q.hero.S).toBeCloseTo((844 - 612) / 4.55, 9)
   })
   it('copyBottom does not change a hero that already clears the copy', () => {
-    expect(computePlacements(390, 844, { copyBottom: 100 }).hero.S).toBeCloseTo(63.65, 2)
+    expect(computePlacements(390, 844, { copyBottom: 100 }).hero.S).toBeCloseTo(366 / WIDEST_TOTAL, 9)
   })
 })
 

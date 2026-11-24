@@ -179,3 +179,109 @@ for (const vp of [
     await expect(play).toBeHidden()
   })
 }
+
+// R13: on phones no pixel may touch the left, right or top edge, on any frame — the widest poses
+// (panic, cheer, dance), taps on the handle (never the carried pose) and a real press-drag.
+type Sample = [number, number, number]
+type SamplerWindow = EngineWindow & { __samples?: Sample[]; __sampling?: boolean }
+const startSampling = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as SamplerWindow
+    w.__samples = []
+    w.__sampling = true
+    const loop = () => {
+      if (!w.__sampling) return
+      const d = w.__engine!.debugState()
+      w.__samples!.push([d.minX, d.maxX, d.top])
+      requestAnimationFrame(loop)
+    }
+    requestAnimationFrame(loop)
+  })
+const stopSampling = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as SamplerWindow
+    w.__sampling = false
+    return w.__samples!
+  })
+
+for (const vp of [
+  { width: 390, height: 844 },
+  { width: 360, height: 640 },
+]) {
+  test(`every frame stays inside the window at ${vp.width}×${vp.height}: wide poses, taps, a drag`, async ({ page }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await engineReady(page)
+    await idle(page)
+    const W = await page.evaluate(() => document.documentElement.clientWidth)
+    const check = (label: string, samples: Sample[]) => {
+      expect(samples.length, `${label}: frames sampled`).toBeGreaterThan(10)
+      samples.forEach(([minX, maxX, top], i) => {
+        expect(minX, `${label} frame ${i} left`).toBeGreaterThanOrEqual(0)
+        expect(maxX, `${label} frame ${i} right`).toBeLessThanOrEqual(W)
+        expect(top, `${label} frame ${i} top`).toBeGreaterThanOrEqual(0)
+      })
+    }
+
+    for (const a of ['panic', 'cheer', 'dance'] as const) {
+      await startSampling(page)
+      await page.evaluate((a) => (window as EngineWindow).__engine!.play(a), a)
+      await page.waitForTimeout(a === 'dance' ? 4400 : 3000)
+      check(a, await stopSampling(page))
+    }
+
+    const handle = page.locator('[data-char="handle"]')
+    await startSampling(page)
+    for (let i = 0; i < 3; i++) {
+      await handle.click()
+      await page.waitForTimeout(400)
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(200)
+    }
+    check('taps', await stopSampling(page))
+
+    const box = (await handle.boundingBox())!
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await startSampling(page)
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x - 120, y - 40, { steps: 10 })
+    await page.mouse.move(x + 120, y - 40, { steps: 20 })
+    await page.mouse.move(x, y, { steps: 10 })
+    await page.mouse.up()
+    await page.waitForTimeout(1200)
+    check('drag', await stopSampling(page))
+  })
+}
+
+for (const vp of [
+  { width: 640, height: 360 },
+  { width: 844, height: 390 },
+]) {
+  test(`short screens (${vp.width}×${vp.height}): every menu item is inside the window and clickable`, async ({ page }) => {
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await engineReady(page)
+    await page.getByRole('button', { name: 'Play with me' }).click()
+    const menu = page.getByRole('menu', { name: 'Make me do a thing' })
+    await expect(menu).toBeVisible()
+    const items = menu.getByRole('menuitem')
+    await expect(items).toHaveCount(12)
+    // the bubble keeps the 16 px phone edge on every side (layout fit, not a lucky mid-animation rect)
+    await page.waitForTimeout(300)
+    const r = (await page.locator('.char-menu').boundingBox())!
+    expect(r.y).toBeGreaterThanOrEqual(16 - 0.5)
+    expect(r.y + r.height).toBeLessThanOrEqual(vp.height - 16 + 0.5)
+    expect(r.x).toBeGreaterThanOrEqual(16 - 0.5)
+    expect(r.x + r.width).toBeLessThanOrEqual(vp.width - 16 + 0.5)
+    for (const item of await items.all()) {
+      await expect(item).toBeInViewport({ ratio: 1 })
+      await item.click({ trial: true })
+    }
+    await items.last().click()
+    await expect(menu).toBeHidden()
+    await expect.poll(async () => (await debug(page)).action).toBe('deploying')
+  })
+}

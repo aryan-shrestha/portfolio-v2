@@ -4,8 +4,13 @@ export type { Placement, PlacementKind }
 
 /** Model-unit bounds around the character origin. y1 is replaced by the measured maximum (Task 11). */
 export const BOX = { x0: -2.6, x1: 2.6, y1: 3.05 }
-/** Widest measured pose, total width in model units (spec §7.5). */
-export const WIDEST_TOTAL = 5.75
+/**
+ * Widest total silhouette of any pose, model units (spec §7.5.2, updated per §7.5.4 / ruling R13): the
+ * maximum over every action, gesture, idle and drag, simulated at 60 fps from idle with the runtime's
+ * damping and elbow fold (drag 6.21, cheer 6.20, panic 6.17), + 0.1, rounded up to 0.05. Phones size
+ * to it. tests/unit/poses.test.ts re-measures every pose and fails if one gets wider.
+ */
+export const WIDEST_TOTAL = 6.35
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 

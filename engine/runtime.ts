@@ -231,7 +231,9 @@ export function createEngine(): EngineAPI {
       actionT += dt
       if (action === 'idle' || action === 'drag' || actionT > DURATION[action]) action = null
     }
-    const pose = poseFor(drag.active ? 'drag' : (action ?? 'idle'), actionT, {
+    // The carried pose starts only once the press has travelled POKE_PX: a tap (a poke) never flails (R13).
+    const carried = drag.active && drag.moved >= POKE_PX
+    const pose = poseFor(carried ? 'drag' : (action ?? 'idle'), actionT, {
       now: reduced ? 0 : now,
       // toward the open side of the page (the screens in chapters): away from his own side
       toward: P[kind].x > 1 ? -1 : 1,
