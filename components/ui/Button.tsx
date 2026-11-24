@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 
 type Props = { href?: string; onClick?: () => void; children: ReactNode; className?: string }
 
@@ -7,6 +8,14 @@ const base =
 
 export function Button({ href, onClick, children, className = '' }: Props) {
   const cls = `${base} ${className}`.trim()
+  // Internal routes use client navigation so the character layer persists (spec §5).
+  if (href?.startsWith('/')) {
+    return (
+      <Link href={href} onClick={onClick} className={cls}>
+        {children}
+      </Link>
+    )
+  }
   if (href) {
     return (
       <a href={href} onClick={onClick} className={cls}>

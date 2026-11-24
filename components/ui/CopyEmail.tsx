@@ -33,12 +33,12 @@ export function CopyEmail({ email, onCopied }: Props) {
         {email}
       </button>
       <span className="flex items-center gap-3 font-mono text-sm">
-        <span role="status" aria-live="polite">
-          {copied ? 'Copied! Talk soon.' : ''}
-        </span>
         <a href={`mailto:${email}`} className="underline underline-offset-4 hover:text-accent">
           Open in mail app
         </a>
+        <span role="status" aria-live="polite">
+          {copied ? 'Copied! Talk soon.' : ''}
+        </span>
       </span>
     </span>
   )

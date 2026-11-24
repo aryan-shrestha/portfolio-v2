@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Phones/tablets (spec §6.1: ≤ 900 px). Matches the engine's mobile test. */
+@custom-variant phone (@media (max-width: 900px));
+
 :root {
   --paper: #f6f4ee;
   --ink: #111110;
@@ -9,6 +12,7 @@
   --grid-line-dark: rgba(255, 255, 255, 0.08);
   --grid-line-light: rgba(0, 0, 0, 0.07);
   --grid-size: 40px;
+  --m: clamp(16px, 3vw, 40px); /* page side margin */
 }
 
 @theme inline {
@@ -63,6 +67,62 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus, var(--accent));
   outline-offset: 3px;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ---------- Home: narration lines (classes driven by components/home/Narration) ---------- */
+.line .bubble {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.line.on .bubble {
+  opacity: 1;
+  transform: none;
+}
+.line.past .bubble {
+  opacity: 0;
+  transform: translateY(-12px);
+}
+@media (max-width: 900px) {
+  .line .bubble {
+    position: sticky;
+    top: 56svh; /* in the gap between the browser frame and the character */
+    font-size: 18px;
+  }
+}
+
+/* ---------- Home: About words light up with scroll ---------- */
+.about-word {
+  opacity: 0.14;
+  transition: opacity 0.25s;
+}
+.about-word.on {
+  opacity: 1;
+}
+.about-word.hl.on {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line .bubble,
+  .line.past .bubble {
+    transition: none;
+    transform: none;
+  }
+  .about-word {
+    opacity: 1;
+    transition: none;
+  }
+  .about-word.hl {
+    color: var(--accent);
+  }
 }
