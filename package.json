@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "images": "node scripts/build-images.mjs"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
