@@ -1,13 +1,13 @@
 import { AmbientLight, Box3, DirectionalLight, OrthographicCamera, Scene, Vector3, WebGLRenderer } from 'three'
-import { elbowTarget } from './arms'
 import { containShift } from './contain'
 import { DEFAULT_LOOK, type Look } from './look'
 import { buildCharacter, type Rig } from './model/build'
 import { computePlacements, placementAt, smootherstep, type PlacementState } from './placement'
+import { applyPose } from './pose-rig'
 import { DURATION, hasPose, poseFor, type PoseKind } from './poses'
 import { QUIPS } from './quips'
 import { createDitherPass } from './render/dither'
-import type { EngineAPI, Gesture, OutfitId, Placement, PlacementKind } from './types'
+import type { EngineAPI, Gesture, OutfitId, Placement, PlacementKind, PlaceInfo } from './types'
 
 type Section = { el: HTMLElement; kind: PlacementKind; outfit?: OutfitId; gesture?: Gesture; top: number }
 
@@ -18,6 +18,8 @@ const GESTURES = new Set<string>(['wave', 'point', 'thumbs', 'think', 'cheer'])
 const BLEND = 0.6
 /** Movement under this many px is a poke, not a drag (spec §7.3). */
 const POKE_PX = 6
+/** Half the idle silhouette width, model units (spec §7.5.2): where his sides are at rest. */
+const REST_HALF = 1.74
 /** Spring back to the placement: k = 60, c = 11 (prototype v12), integrated in small steps. */
 const K = 60
 const C = 11
@@ -96,6 +98,8 @@ export function createEngine(): EngineAPI {
   let bh = 0
 
   const pokes = new Set<() => void>()
+  const places = new Set<(p: PlaceInfo) => void>()
+  let place: PlaceInfo | null = null
   const sil = new Box3()
   const hb = new Box3()
   const tmp = new Box3()
@@ -173,6 +177,17 @@ export function createEngine(): EngineAPI {
     sayUntil = clock() + ms / 1000
   }
 
+  /** Tells listeners where he settles (the resting silhouette of the current placement), on change only. */
+  function notifyPlace(kind: PlacementKind) {
+    const p = P[kind]
+    const badge = kind === 'badge' && p.d !== undefined && p.cx !== undefined
+    const left = badge ? W / 2 + p.cx! - p.d! / 2 : W / 2 + p.x - REST_HALF * p.S
+    const right = badge ? W / 2 + p.cx! + p.d! / 2 : W / 2 + p.x + REST_HALF * p.S
+    if (place && place.kind === kind && Math.abs(place.left - left) < 1 && Math.abs(place.right - right) < 1) return
+    place = { kind, left, right, W, H }
+    places.forEach((cb) => cb(place!))
+  }
+
   /** Where he should be this frame: scroll-scrubbed (spec §6.1), or still at the hero under reduced motion. */
   function target(): PlacementState {
     if (reduced || sections.length === 0) {
@@ -214,13 +229,15 @@ export function createEngine(): EngineAPI {
 
     if (action) {
       actionT += dt
-      if (actionT > (DURATION[action] ?? 0)) action = null
+      if (action === 'idle' || action === 'drag' || actionT > DURATION[action]) action = null
     }
     const pose = poseFor(drag.active ? 'drag' : (action ?? 'idle'), actionT, {
       now: reduced ? 0 : now,
-      toward: kind === 'right' ? -1 : 1, // point toward the screens, away from his own side
+      // toward the open side of the page (the screens in chapters): away from his own side
+      toward: P[kind].x > 1 ? -1 : 1,
       vx: drag.vx,
     })
+    notifyPlace(kind)
     if (!drag.active) {
       for (let left = dt; left > 1e-6; left -= STEP) {
         const h = Math.min(STEP, left)
@@ -232,7 +249,7 @@ export function createEngine(): EngineAPI {
     }
     drag.vx *= 0.85
 
-    const { root, body, head, face, arms, eyes, mouth } = rig
+    const { root, face } = rig
     root.scale.setScalar(st.S)
     root.position.set(st.x + offset.x, st.y + offset.y, 0)
 
@@ -243,28 +260,17 @@ export function createEngine(): EngineAPI {
     root.updateMatrixWorld(true)
     face.getWorldPosition(v)
     const still = reduced
-    const yaw = still ? 0 : clamp(((pointer.x - (W / 2 + v.x)) / W) * 1.1, -0.5, 0.5)
-    const pitch = still ? 0 : clamp(((pointer.y - (H / 2 - v.y)) / H) * 0.8, -0.3, 0.3)
-    head.rotation.y = damp(head.rotation.y, Math.abs(travel) > 0.05 ? travel : yaw, 8, dt)
-    head.rotation.x = damp(head.rotation.x, pose.headX + pitch, 8, dt)
-    head.rotation.z = damp(head.rotation.z, pose.headZ + (still ? 0 : Math.sin(now * 0.9) * 0.03), 8, dt)
-    body.rotation.z = damp(body.rotation.z, pose.bodyZ - travel * 0.12, 10, dt)
-    body.position.y = damp(body.position.y, pose.bodyY, 12, dt)
-    arms.forEach((a, i) => {
-      a.shoulder.rotation.z = damp(a.shoulder.rotation.z, pose.sh[i], 12, dt)
-      const want = elbowTarget(a.shoulder.rotation.z, pose.sh[i], pose.el[i], a.side)
-      a.elbow.rotation.z = damp(a.elbow.rotation.z, want, 18, dt)
-    })
     if (!still) {
       blinkAt -= dt
       if (blinkAt < -0.12) blinkAt = 2 + Math.random() * 3
     }
-    const blinking = blinkAt < 0
-    eyes.open.visible = pose.wide
-    eyes.smile.visible = !pose.wide
-    eyes.open.scale.y = eyes.smile.scale.y = blinking ? 0.15 : 1
-    mouth.open.visible = pose.open
-    mouth.smile.visible = !pose.open
+    applyPose(rig, pose, dt, {
+      yaw: still ? 0 : clamp(((pointer.x - (W / 2 + v.x)) / W) * 1.1, -0.5, 0.5),
+      pitch: still ? 0 : clamp(((pointer.y - (H / 2 - v.y)) / H) * 0.8, -0.3, 0.3),
+      sway: still ? 0 : Math.sin(now * 0.9) * 0.03,
+      travel,
+      blink: blinkAt < 0,
+    })
 
     // Containment on this frame's final pose (spec §7.5.1), not while he is the badge.
     if (st.b <= 0.01) {
@@ -332,7 +338,8 @@ export function createEngine(): EngineAPI {
     setStyle(els.bubble, 'left', `${clamp(W / 2 + v.x, bw + 8, W - 8).toFixed(1)}px`)
     setStyle(els.bubble, 'top', `${clamp(H / 2 - v.y, bh + 8, H - 8).toFixed(1)}px`)
 
-    dither.render(scene, camera, { px: PX, clip })
+    // No camera flash under reduced motion (a full-window brightness change).
+    dither.render(scene, camera, { px: PX, clip, fade: pose.visible ?? 1, flash: reduced ? 0 : (pose.flash ?? 0) })
   }
 
   function run() {
@@ -357,6 +364,8 @@ export function createEngine(): EngineAPI {
     reduced = !!motionQuery?.matches
   }
   const onDown = (e: PointerEvent) => {
+    // Primary pointer, left button only (R11): a second finger or a right-click is not a grab.
+    if (!e.isPrimary || e.button !== 0 || drag.active) return
     Object.assign(drag, { active: true, px: e.clientX, py: e.clientY, ox: offset.x, oy: offset.y, moved: 0, vx: 0 })
     vel.x = vel.y = 0
     els?.handle.setPointerCapture(e.pointerId)
@@ -364,7 +373,7 @@ export function createEngine(): EngineAPI {
     e.preventDefault()
   }
   const onMove = (e: PointerEvent) => {
-    if (!drag.active) return
+    if (!drag.active || !e.isPrimary) return
     const prev = offset.x
     offset.x = drag.ox + (e.clientX - drag.px)
     offset.y = drag.oy - (e.clientY - drag.py)
@@ -373,13 +382,18 @@ export function createEngine(): EngineAPI {
     drag.moved = Math.max(drag.moved, Math.hypot(e.clientX - drag.px, e.clientY - drag.py))
     if (was < POKE_PX && drag.moved >= POKE_PX) say(QUIPS.drag, 60_000)
   }
-  const onUp = () => {
+  /** Ends a drag. Only a real release (pointerup) can count as a poke; a cancel or lost capture cannot. */
+  const release = (poke: boolean) => {
     if (!drag.active) return
     drag.active = false
     document.body.classList.remove('char-dragging')
-    if (drag.moved < POKE_PX) pokes.forEach((cb) => cb())
-    else say(QUIPS.drop, 2000)
+    if (drag.moved >= POKE_PX) say(QUIPS.drop, 2000)
+    else if (poke) pokes.forEach((cb) => cb())
   }
+  const onUp = (e: PointerEvent) => {
+    if (e.isPrimary) release(true)
+  }
+  const onCancel = () => release(false)
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => (topsDirty = true)) : null
 
   return {
@@ -401,7 +415,8 @@ export function createEngine(): EngineAPI {
       handle.addEventListener('pointerdown', onDown)
       handle.addEventListener('pointermove', onMove)
       handle.addEventListener('pointerup', onUp)
-      handle.addEventListener('pointercancel', onUp)
+      handle.addEventListener('pointercancel', onCancel)
+      handle.addEventListener('lostpointercapture', onCancel)
       ro?.observe(document.body)
       if (!document.hidden) run()
     },
@@ -452,6 +467,12 @@ export function createEngine(): EngineAPI {
       return () => void pokes.delete(cb)
     },
 
+    onPlace(cb) {
+      places.add(cb)
+      if (place) cb(place)
+      return () => void places.delete(cb)
+    },
+
     debugState() {
       const a = action === 'idle' || action === 'drag' ? null : action
       if (!rig) return { minX: 0, maxX: 0, top: 0, S: 0, placement: kindNow(), outfit: outfit(), action: a }
@@ -480,7 +501,8 @@ export function createEngine(): EngineAPI {
         handle.removeEventListener('pointerdown', onDown)
         handle.removeEventListener('pointermove', onMove)
         handle.removeEventListener('pointerup', onUp)
-        handle.removeEventListener('pointercancel', onUp)
+        handle.removeEventListener('pointercancel', onCancel)
+        handle.removeEventListener('lostpointercapture', onCancel)
         handle.style.width = handle.style.height = '0px'
         bubble.style.opacity = badge.style.opacity = '0'
         bubble.setAttribute('aria-hidden', 'true')
@@ -501,6 +523,8 @@ export function createEngine(): EngineAPI {
       renderer = null
       els = null
       pokes.clear()
+      places.clear()
+      place = null
       sections = []
       styleCache.clear()
     },

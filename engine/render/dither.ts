@@ -18,6 +18,10 @@ export type DitherOpts = {
   px: number
   /** Circular clip in CSS px from the window centre (y up). */
   clip?: { cx: number; cy: number; r: number }
+  /** 0–1: how much of him is left (vanish). Dots drop out in 2×2-cell ordered-dither steps. Default 1. */
+  fade?: number
+  /** 0–1: camera flash. Washes him out and lays white over the window. Default 0. */
+  flash?: number
 }
 
 /**
@@ -35,16 +39,23 @@ export function createDitherPass(renderer: WebGLRenderer) {
       paper: { value: hexVec('#ffffff') },
       clipC: { value: new Vector2() },
       clipR: { value: 1e6 },
+      fade: { value: 1 },
+      flash: { value: 0 },
     },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: `
-    uniform sampler2D tDiffuse; uniform vec3 ink; uniform vec3 accent; uniform vec3 paper; uniform vec2 clipC; uniform float clipR; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec3 ink; uniform vec3 accent; uniform vec3 paper; uniform vec2 clipC; uniform float clipR;
+    uniform float fade; uniform float flash; varying vec2 vUv;
     float bayer4(vec2 p){ int x = int(mod(p.x, 4.0)); int y = int(mod(p.y, 4.0));
       float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.); return (m[x + y * 4] + 0.5) / 16.0; }
     void main(){
       if (distance(gl_FragCoord.xy, clipC) > clipR) discard;
-      vec4 c = texture2D(tDiffuse, vUv); if (c.a < 0.25) discard;
-      float l = clamp((pow(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 1.0 / 2.2) - 0.03) * 1.35, 0.0, 1.0);
+      vec4 c = texture2D(tDiffuse, vUv);
+      // background: transparent, or premultiplied white while the flash is up
+      if (c.a < 0.25) { if (flash <= 0.0) discard; gl_FragColor = vec4(flash); return; }
+      // vanish: a coarser ordered pattern than the shading, so he dissolves in blocks, not into ink
+      if (bayer4(floor(gl_FragCoord.xy / 2.0)) >= fade) discard;
+      float l = clamp((pow(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 1.0 / 2.2) - 0.03) * 1.35 + flash, 0.0, 1.0);
       bool rope = c.a < 0.75;
       float th = bayer4(gl_FragCoord.xy);
       vec3 a = rope ? accent : ink; float lv = rope ? clamp(l * 0.75 - 0.12, 0.0, 1.0) : l;
@@ -67,6 +78,8 @@ export function createDitherPass(renderer: WebGLRenderer) {
       const { clip } = opts
       post.uniforms.clipR.value = clip ? clip.r / curPx : 1e6
       post.uniforms.clipC.value.set(clip ? (W / 2 + clip.cx) / curPx : 0, clip ? (H / 2 + clip.cy) / curPx : 0)
+      post.uniforms.fade.value = opts.fade ?? 1
+      post.uniforms.flash.value = opts.flash ?? 0
       renderer.setRenderTarget(rt)
       renderer.clear()
       renderer.render(scene, camera)

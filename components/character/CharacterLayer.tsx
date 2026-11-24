@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import type { EngineAPI } from '@/engine/types'
 import type { Gesture } from '@/engine/types'
 import { CASE_COMMENTS, QUIPS } from '@/engine/quips'
+import { ActionMenu } from './ActionMenu'
 
 declare global {
   interface Window {
@@ -76,7 +77,7 @@ export function CharacterLayer() {
     }
   }, [])
 
-  // Page events: narration gestures, copied email, pokes.
+  // Page events: narration gestures, copied email. (Pokes open the action menu: ActionMenu.)
   useEffect(() => {
     if (!engine) return
     const onLine = (e: Event) => {
@@ -87,12 +88,9 @@ export function CharacterLayer() {
     const onCopied = () => engine.say(QUIPS.copied, 2500)
     window.addEventListener('narration:line', onLine)
     window.addEventListener('email:copied', onCopied)
-    // The action menu arrives in Task 10; for now a poke is a wave.
-    const offPoke = engine.onPoke(() => engine.play('wave'))
     return () => {
       window.removeEventListener('narration:line', onLine)
       window.removeEventListener('email:copied', onCopied)
-      offPoke()
     }
   }, [engine])
 
@@ -144,6 +142,8 @@ export function CharacterLayer() {
       <canvas ref={canvasRef} data-char="canvas" aria-hidden="true" className="char-canvas" />
       <div ref={handleRef} data-char="handle" aria-hidden="true" className="char-handle" />
       <div ref={bubbleRef} data-char="bubble" aria-hidden="true" className="char-bubble" />
+      {/* keyed by route: a navigation closes the menu */}
+      {engine ? <ActionMenu key={pathname} engine={engine} /> : null}
     </>
   )
 }

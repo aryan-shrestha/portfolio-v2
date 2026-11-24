@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferGeometry,
   CapsuleGeometry,
   CircleGeometry,
@@ -30,6 +31,8 @@ export type Rig = {
   mouth: { smile: Mesh; open: Mesh }
   /** Empty mount points for outfits (Task 11). */
   slots: { hat: Group; neck: Group; hands: [Group, Group] }
+  /** Action props, scaled to 0 (hidden) until a pose shows them: a phone per hand (selfie), a laptop (deploying). */
+  props: { phone: [Group, Group]; laptop: Group }
   bubbleAnchor: Object3D
   /** [skull, torso, hair cap]: the parts the runtime tracks for the grab handle. */
   handleParts: Object3D[]
@@ -40,6 +43,14 @@ export type Rig = {
 const STRING = '#5f8f5f' // luminance stand-in only; the accent flag (alpha 0.5) selects vermilion, not the colour
 const DARK = '#000000'
 const STUBBLE = '#b98d6a'
+const PROP_DARK = '#2a2a2e'
+const PROP_LIGHT = '#c9c4b8'
+
+/** Props start hidden: zero scale also keeps them out of the silhouette bounds. */
+const hide = (o: Object3D) => {
+  o.scale.setScalar(0)
+  o.visible = false
+}
 
 const at = <T extends Object3D>(o: T, x: number, y: number, z: number): T => (o.position.set(x, y, z), o)
 
@@ -181,7 +192,7 @@ export function buildCharacter(look: Look): Rig {
   neckSlot.name = 'slot-neck'
   body.add(neckSlot)
 
-  const makeArm = (side: -1 | 1): { arm: Arm; handSlot: Group } => {
+  const makeArm = (side: -1 | 1): { arm: Arm; handSlot: Group; phone: Group } => {
     const shoulder = at(new Group(), side * 1.0, 0.05, 0)
     body.add(shoulder)
     shoulder.add(at(part(new CapsuleGeometry(0.27, 0.6, 6, 16), hoodie), 0, -0.45, 0))
@@ -204,10 +215,25 @@ export function buildCharacter(look: Look): Rig {
     const handSlot = new Group()
     handSlot.name = 'slot-hand'
     hand.add(handSlot)
-    return { arm: { shoulder, elbow, side }, handSlot }
+    // Selfie phone: held upright in the palm, its back to the camera.
+    const phone = at(new Group(), side * -0.04, -0.2, 0.16)
+    phone.add(part(new BoxGeometry(0.36, 0.62, 0.07), PROP_DARK))
+    hide(phone)
+    hand.add(phone)
+    return { arm: { shoulder, elbow, side }, handSlot, phone }
   }
   const a0 = makeArm(-1)
   const a1 = makeArm(1)
+
+  // Laptop for "deploying": the back of an open lid in front of his chest, base tucked behind it.
+  const laptop = at(new Group(), 0, -0.78, 1.95)
+  const lid = part(new BoxGeometry(1.7, 1.05, 0.06), PROP_LIGHT)
+  lid.rotation.x = -0.18
+  laptop.add(lid)
+  const base = at(part(new BoxGeometry(1.7, 0.06, 0.9), PROP_LIGHT), 0, -0.5, -0.45)
+  laptop.add(base)
+  hide(laptop)
+  body.add(laptop)
 
   return {
     root,
@@ -218,6 +244,7 @@ export function buildCharacter(look: Look): Rig {
     eyes: { smile: eyesSmile, open: eyesOpen },
     mouth: { smile: mouthSmile, open: mouthOpen },
     slots: { hat, neck: neckSlot, hands: [a0.handSlot, a1.handSlot] },
+    props: { phone: [a0.phone, a1.phone], laptop },
     bubbleAnchor,
     handleParts: [skull, torso, cap],
     dispose() {

@@ -92,14 +92,14 @@ test('dragging him 300 px left and letting go springs him back', async ({ page }
   expect(Math.abs((await debug(page)).minX - before)).toBeLessThanOrEqual(2)
 })
 
-test('a click without drag pokes him (he waves)', async ({ page }) => {
+test('a click without drag pokes him (the action menu opens; details in actions.spec)', async ({ page }) => {
   await page.goto('/')
   await engineReady(page)
   await page.waitForFunction(() => (window as EngineWindow).__engine!.debugState().action === null, null, {
     timeout: 6000,
   })
   await page.locator('[data-char="handle"]').click()
-  await expect.poll(async () => (await debug(page)).action).toBe('wave')
+  await expect(page.getByRole('menu')).toBeVisible()
 })
 
 test('narration lines and the copied email reach him', async ({ page }) => {

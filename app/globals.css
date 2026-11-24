@@ -213,6 +213,101 @@ body {
 .char-bubble b {
   color: #c43a22; /* AA on white (R9); the accent token stays #e2462c */
 }
+/* "Play with me" pill and the action menu (components/character/ActionMenu): on the bottom edge,
+   beside him; `left`/`right` come from his resting place. The menu is a speech bubble of actions. */
+:root {
+  --char-edge: 24px;
+}
+@media (max-width: 900px) {
+  :root {
+    --char-edge: 16px;
+  }
+}
+.char-play {
+  position: fixed;
+  z-index: 33;
+}
+.char-menu {
+  position: fixed;
+  z-index: 40;
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--char-edge));
+  padding: 12px;
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.3);
+  transform-origin: bottom right;
+  animation: char-menu-in 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.char-menu[data-side='left'] {
+  transform-origin: bottom left;
+}
+@keyframes char-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+}
+.char-menu-title {
+  padding: 4px 12px 8px;
+  font-family: var(--font-bricolage), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--muted);
+}
+.char-menu-list {
+  display: grid;
+  grid-template-rows: repeat(6, auto);
+  grid-auto-flow: column; /* reads (and arrows) down the first column, then the second */
+  gap: 2px 4px;
+}
+.char-menu-item {
+  min-width: 8.5rem;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  text-align: left;
+  font-family: var(--font-bricolage), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+.char-menu-item:hover,
+.char-menu-item:focus-visible {
+  background: var(--ink);
+  color: #fff;
+}
+.char-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.char-menu-item:active {
+  transform: translateY(1px);
+}
+@media (max-width: 900px) {
+  .char-menu-item {
+    min-width: 7.5rem;
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .char-menu {
+    animation: none;
+  }
+  .char-menu-item {
+    transition: none;
+  }
+}
 body.char-dragging,
 body.char-dragging * {
   cursor: grabbing !important;

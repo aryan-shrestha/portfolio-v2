@@ -47,6 +47,9 @@ export type DebugState = {
   action: Action | Gesture | null
 }
 
+/** Where he rests now (CSS px from the window's left edge): the idle silhouette, or the badge circle. */
+export type PlaceInfo = { kind: PlacementKind; left: number; right: number; W: number; H: number }
+
 export interface EngineAPI {
   mount(canvas: HTMLCanvasElement, handle: HTMLElement, bubble: HTMLElement, badge: HTMLElement): void
   /** Re-read on every route change. Each element's `data-place` (and `data-outfit`, `data-gesture`) is read now. */
@@ -58,6 +61,8 @@ export interface EngineAPI {
   setLook(base: Look['base']): void
   setOutfit(id: OutfitId, priority?: 'visitor' | 'chapter'): void
   onPoke(cb: () => void): () => void
+  /** Called with his resting place now and whenever it changes (section, resize); returns unsubscribe. */
+  onPlace(cb: (p: PlaceInfo) => void): () => void
   /** Screen px: silhouette left/right/top edges (exact Box3), px per model unit, and what he is doing. */
   debugState(): DebugState
   destroy(): void
