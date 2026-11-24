@@ -59,6 +59,8 @@ export type PlaceInfo = {
   right: number
   /** how far his floor sits above the window's bottom edge (the dress-up stage on phones) */
   lift: number
+  /** left and right edges of the area he stands in: the window, or the dress-up stage */
+  area: [number, number]
   W: number
   H: number
 }

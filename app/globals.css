@@ -2,12 +2,12 @@
 
 /* Phones/tablets (spec §6.1: ≤ 900 px). Matches the engine's mobile test. */
 @custom-variant phone (@media (max-width: 900px));
-/* Dress-up: stage beside the controls on desktops and landscape screens; stacked on portrait phones/tablets. */
+/* Dress-up: stage beside the controls on desktops and every landscape screen; stacked on portrait phones/tablets. */
 @custom-variant wide {
   @media (min-width: 901px) {
     @slot;
   }
-  @media (min-width: 600px) and (orientation: landscape) {
+  @media (orientation: landscape) {
     @slot;
   }
 }

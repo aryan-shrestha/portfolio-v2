@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOOK, HAIR_STYLES, OUTFITS, SWATCHES, type Look } from '@/engine/look'
 import { buildCharacter, type Rig } from '@/engine/model/build'
 import { applyHair } from '@/engine/model/hair'
+import { RIM, RIM_NAME } from '@/engine/model/kit'
 import { applyOutfit } from '@/engine/model/outfits'
 import type { HairStyle, OutfitId } from '@/engine/types'
 
@@ -270,5 +271,65 @@ describe('swaps free what they replace (no leaks across dress-up changes)', () =
     // and the rig's own dispose frees the rest
     rig.dispose()
     for (const r of [...after.geos, ...after.mats]) expect(disposed.has(r), `alive ${label(r)}`).toBe(true)
+  })
+})
+
+describe('facial features carry paper rims (ruling R14)', () => {
+  /** The features R14 names: eyes, brows, mouth and glasses (lenses + bridge). Nose line, moustache and
+   * the glasses' temples are ink only: their rims merged into a pale muzzle and white bars by the ears. */
+  const RIMMED = new Set(['eye', 'brow', 'mouth', 'lens', 'bridge'])
+  const features = (rig: Rig) => {
+    const out: Mesh[] = []
+    rig.face.traverse((o) => {
+      const m = o as Mesh
+      if (m.isMesh && RIMMED.has(m.name)) out.push(m)
+    })
+    return out
+  }
+  const ownBox = (m: Mesh) => {
+    m.geometry.computeBoundingBox()
+    return m.geometry.boundingBox!.clone().applyMatrix4(m.matrixWorld)
+  }
+
+  it('every ink feature has a white rim behind it, at least RIM wider on every side, drawn before the ink', () => {
+    const rig = buildCharacter(lookOf('wavy-fringe', 'hoodie', { glasses: true, skin: '#6e4630' }))
+    rig.root.updateMatrixWorld(true)
+    const list = features(rig)
+    // 2 brows, 2 smile arcs, 2 open-eye dots, 2 mouths + glasses: 2 lenses, bridge
+    expect(list).toHaveLength(11)
+    expect(new Set(list.map((m) => m.name))).toEqual(RIMMED)
+    for (const ink of list) {
+      const rim = ink.children.find((c) => c.name === RIM_NAME) as Mesh
+      expect(rim, ink.uuid).toBeTruthy()
+      const mat = rim.material as MeshBasicMaterial
+      expect(mat.color.getHexString()).toBe('ffffff')
+      expect(mat.depthWrite).toBe(false)
+      expect(rim.renderOrder).toBeLessThan(ink.renderOrder)
+      const a = ownBox(ink)
+      const b = ownBox(rim)
+      // in face space the margin is ≥ RIM before rotation; allow the features' small turns (≤ 0.35 rad)
+      const m = RIM * Math.cos(0.36) - 1e-6
+      expect(a.min.x - b.min.x).toBeGreaterThanOrEqual(m * 0.8)
+      expect(b.max.x - a.max.x).toBeGreaterThanOrEqual(m * 0.8)
+      expect(a.min.y - b.min.y).toBeGreaterThanOrEqual(m * 0.8)
+      expect(b.max.y - a.max.y).toBeGreaterThanOrEqual(m * 0.8)
+      // lifted toward the camera, so the skin around the feature never hides it
+      expect(b.getCenter(new Vector3()).z).toBeGreaterThan(a.getCenter(new Vector3()).z)
+    }
+  })
+
+  it('every unlit ink mark on the face draws after the rims', () => {
+    const rig = buildCharacter(lookOf('wavy-fringe', 'hoodie', { glasses: true }))
+    rig.face.traverse((o) => {
+      const m = o as Mesh
+      if (m.isMesh && (m.material as MeshBasicMaterial).isMeshBasicMaterial && m.name !== RIM_NAME) expect(m.renderOrder, m.name).toBe(2)
+    })
+  })
+
+  it('rims follow their feature: hidden open eyes and open mouth hide their rims too', () => {
+    const rig = buildCharacter(DEFAULT_LOOK)
+    expect(rig.eyes.open.visible).toBe(false)
+    expect(rig.mouth.open.visible).toBe(false)
+    expect(rig.mouth.open.children.some((c) => c.name === RIM_NAME)).toBe(true)
   })
 })

@@ -4,6 +4,7 @@ import type { BufferGeometry, Material, Object3D } from 'three'
 /** Luminance stand-in for accent parts; the accent flag (alpha 0.5) selects vermilion, not this colour. */
 export const ACCENT_STAND_IN = '#5f8f5f'
 const DARK = '#000000'
+const PAPER = '#ffffff'
 
 /**
  * Part factory that owns what it creates: every geometry and material made through a kit is freed by
@@ -17,6 +18,19 @@ export type Kit = {
   accent(geo: BufferGeometry): Group
   /** Unlit mesh (eyes, brows, lenses' rims). */
   flat(geo: BufferGeometry, color?: string): Mesh
+  /**
+   * Ink facial feature with a paper rim behind it (ruling R14): `rim` is the same shape grown by RIM on
+   * every side. The rim is drawn over the skin (no depth write, lifted toward the camera) and the ink
+   * over the rim, so eyes, mouth, brows and glasses read on every skin tone. `scale` is the ink's scale.
+   * `rim: null` draws the ink only (in the same pass as the inked features).
+   */
+  feature(
+    name: string,
+    geo: BufferGeometry,
+    rim: BufferGeometry | null,
+    color?: string,
+    scale?: [number, number, number],
+  ): Mesh
   /** Lit mesh without an outline (stubble). */
   lit(geo: BufferGeometry, color: string): Mesh
   dispose(): void
@@ -34,6 +48,13 @@ export const show = (o: Object3D) => {
 
 export const at = <T extends Object3D>(o: T, x: number, y: number, z: number): T => (o.position.set(x, y, z), o)
 
+/** How far a feature's paper rim reaches past it, model units: one dither cell at phone size (S ≈ 53). */
+export const RIM = 0.06
+/** How far the rim sits in front of the feature's centre, so the skin around it never covers it. */
+const RIM_LIFT = 0.05
+/** Name of a feature's rim mesh. */
+export const RIM_NAME = 'rim'
+
 /** Outline meshes are tagged so silhouette maths can skip them (same geometry, same transform). */
 export const OUTLINE = 'outline'
 
@@ -47,6 +68,7 @@ export function createKit(outline: Material): Kit {
     // Accent flag channel: alpha 0.5. Three only forces alpha to 1 for NormalBlending opaque materials,
     // so NoBlending lets the fragment alpha reach the render target as-is.
     keep(new MeshLambertMaterial(accent ? { color, opacity: 0.5, blending: NoBlending } : { color }))
+  let paper: MeshBasicMaterial | undefined
   const hull = (geo: BufferGeometry) => {
     const m = new Mesh(geo, outline)
     m.userData[OUTLINE] = true
@@ -71,6 +93,20 @@ export function createKit(outline: Material): Kit {
     },
     flat(geo, color = DARK) {
       return new Mesh(track(geo), keep(new MeshBasicMaterial({ color })))
+    },
+    feature(name, geo, rimGeo, color = DARK, scale) {
+      const ink = new Mesh(track(geo), keep(new MeshBasicMaterial({ color })))
+      ink.name = name
+      if (scale) ink.scale.set(...scale)
+      ink.renderOrder = 2
+      if (!rimGeo) return ink
+      const rim = new Mesh(track(rimGeo), (paper ??= keep(new MeshBasicMaterial({ color: PAPER, depthWrite: false }))))
+      rim.name = RIM_NAME
+      rim.position.z = RIM_LIFT / ink.scale.z
+      // opaque objects draw in renderOrder: skin and the rest (0), then rims (1), then the ink (2)
+      rim.renderOrder = 1
+      ink.add(rim)
+      return ink
     },
     lit(geo, color) {
       return new Mesh(track(geo), lambert(color))

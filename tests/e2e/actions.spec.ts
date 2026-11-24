@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { startSampling, stopSampling, type Sample } from './sampling'
 
 type Debug = { minX: number; maxX: number; top: number; S: number; placement: string; action: string | null }
 type EngineWindow = Window & { __engine?: { debugState(): Debug; play(a: string): void } }
@@ -182,28 +183,6 @@ for (const vp of [
 
 // R13: on phones no pixel may touch the left, right or top edge, on any frame — the widest poses
 // (panic, cheer, dance), taps on the handle (never the carried pose) and a real press-drag.
-type Sample = [number, number, number]
-type SamplerWindow = EngineWindow & { __samples?: Sample[]; __sampling?: boolean }
-const startSampling = (page: Page) =>
-  page.evaluate(() => {
-    const w = window as SamplerWindow
-    w.__samples = []
-    w.__sampling = true
-    const loop = () => {
-      if (!w.__sampling) return
-      const d = w.__engine!.debugState()
-      w.__samples!.push([d.minX, d.maxX, d.top])
-      requestAnimationFrame(loop)
-    }
-    requestAnimationFrame(loop)
-  })
-const stopSampling = (page: Page) =>
-  page.evaluate(() => {
-    const w = window as SamplerWindow
-    w.__sampling = false
-    return w.__samples!
-  })
-
 for (const vp of [
   { width: 390, height: 844 },
   { width: 360, height: 640 },

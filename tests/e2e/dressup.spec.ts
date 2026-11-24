@@ -183,3 +183,48 @@ test('garbage in storage falls back to his own look', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Wavy fringe', exact: true })).toHaveAttribute('aria-pressed', 'true')
   expect((await debug(page)).outfit).toBe('hoodie')
 })
+
+// Short screens (review fix): the stage keeps him large (≥ 180 px tall: S × (BOX.y1 − STAGE_CUT) = S × 5.55),
+// the long 404 heading stays within two lines, and he touches no edge.
+for (const url of ['/dress-up', '/missing'])
+  for (const vp of [
+    { width: 568, height: 320 },
+    { width: 640, height: 360 },
+    { width: 360, height: 640 },
+  ])
+    test(`${url} at ${vp.width}×${vp.height}: he stays ≥ 180 px tall, on screen, heading ≤ 2 lines`, async ({
+      page,
+    }) => {
+      const errors = trackErrors(page)
+      await page.setViewportSize(vp)
+      await page.goto(url)
+      await engineReady(page)
+      await expect.poll(async () => (await debug(page)).placement).toBe('stage')
+      await idle(page)
+      await page.waitForTimeout(300)
+      const d = await debug(page)
+      expect(d.S * 5.55, `figure height (S = ${d.S.toFixed(1)})`).toBeGreaterThanOrEqual(180)
+      const h1 = page.getByRole('heading', { level: 1 })
+      const lines = await h1.evaluate(
+        (el) => el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight),
+      )
+      expect(lines).toBeLessThanOrEqual(2.2)
+      // the figure starts below the heading
+      const hb = (await h1.boundingBox())!
+      expect(d.top).toBeGreaterThanOrEqual(hb.y + hb.height)
+      // the "Play with me" pill stays on his stage, off the controls
+      const pill = (await page.getByRole('button', { name: 'Play with me' }).boundingBox())!
+      const panel = (await page.getByRole('region', { name: 'Pick a look' }).boundingBox())!
+      const apart = pill.x + pill.width <= panel.x + 0.5 || pill.y + pill.height <= panel.y + 0.5
+      expect(apart, 'pill clear of the controls').toBe(true)
+      const W = await page.evaluate(() => document.documentElement.clientWidth)
+      await page.evaluate(() => (window as EngineWindow).__engine!.play('panic'))
+      for (let i = 0; i < 10; i++) {
+        const f = await debug(page)
+        expect(f.minX).toBeGreaterThanOrEqual(0)
+        expect(f.maxX).toBeLessThanOrEqual(W)
+        expect(f.top).toBeGreaterThanOrEqual(0)
+        await page.waitForTimeout(150)
+      }
+      expect(errors().filter((e) => !e.includes('404'))).toEqual([])
+    })

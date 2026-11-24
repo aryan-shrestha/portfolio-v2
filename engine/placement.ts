@@ -11,6 +11,8 @@ export type { Placement, PlacementKind }
 export const BOX = { x0: -2.6, x1: 2.6, y1: 3.15 }
 /** Dress-up stage: the model y that sits on the stage floor, low enough to show his hands and what they hold. */
 export const STAGE_CUT = -2.4
+/** Stage margin, CSS px: each side of the widest pose, and above the tallest hat. */
+export const STAGE_PAD = 16
 /** The dress-up stage area in CSS px from the window's top-left (spec §7.6: he is centred on it). */
 export type StageRect = { left: number; top: number; right: number; bottom: number }
 /**
@@ -53,7 +55,10 @@ export function computePlacements(
   // Stage: centred on its area (the whole window by default), fitting the widest pose and the tallest
   // hat; his floor is the area's bottom edge and nothing of him draws below it.
   const r = opts.stage ?? { left: 0, top: 0, right: W, bottom: H }
-  const Sst = Math.max(0, Math.min((r.right - r.left - 48) / WIDEST_TOTAL, (r.bottom - r.top - 48) / (BOX.y1 - STAGE_CUT)))
+  const Sst = Math.max(
+    0,
+    Math.min((r.right - r.left - 2 * STAGE_PAD) / WIDEST_TOTAL, (r.bottom - r.top - STAGE_PAD) / (BOX.y1 - STAGE_CUT)),
+  )
   const floor = H / 2 - r.bottom
 
   return {

@@ -38,14 +38,16 @@ function anchorFor(p: PlaceInfo, buttonW: number): Anchor {
   const gap = gapFor(p.W)
   const badge = p.kind === 'badge'
   const lift = p.lift // his floor above the window's bottom (dress-up stage on phones): sit on it too
-  // He stands right of centre (or centred): the button goes on his left, else on his right.
-  if ((p.left + p.right) / 2 >= p.W / 2) {
-    const room = p.left - gap - buttonW >= gap
-    // No room beside him (phones: he is centred and wide): the corner on his right, over his sleeve.
-    return { side: 'right', offset: room ? p.W - p.left + gap : gap, badge, lift }
+  // The area he stands in: the window, or the dress-up stage beside its controls.
+  const [a0, a1] = p.area
+  // He stands right of the area's centre (or centred): the button goes on his left, else on his right.
+  if ((p.left + p.right) / 2 >= (a0 + a1) / 2) {
+    const room = p.left - gap - buttonW >= a0 + gap
+    // No room beside him (phones: he is centred and wide): the area's corner on his right, over his sleeve.
+    return { side: 'right', offset: room ? p.W - p.left + gap : p.W - a1 + gap, badge, lift }
   }
-  const room = p.W - p.right - gap - buttonW >= gap
-  return { side: 'left', offset: room ? p.right + gap : gap, badge, lift }
+  const room = a1 - p.right - gap - buttonW >= gap
+  return { side: 'left', offset: room ? p.right + gap : a0 + gap, badge, lift }
 }
 
 /**

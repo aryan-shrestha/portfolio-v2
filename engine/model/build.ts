@@ -14,7 +14,7 @@ import {
 import type { Material, MeshBasicMaterial, MeshLambertMaterial } from 'three'
 import type { Look } from '../look'
 import { applyHair } from './hair'
-import { at, createKit, hide, type Kit } from './kit'
+import { RIM, at, createKit, hide, type Kit } from './kit'
 import { applyOutfit } from './outfits'
 
 export type Arm = { shoulder: Group; elbow: Group; side: -1 | 1 }
@@ -64,6 +64,12 @@ const STUBBLE = '#b98d6a'
 const PROP_DARK = '#2a2a2e'
 const PROP_LIGHT = '#c9c4b8'
 
+/** Rim for an open torus arc: thicker by RIM, and longer at both ends so it also edges the arc's ends. */
+const arcRim = (r: number, tube: number, segs: number, arc: number) => {
+  const d = RIM / r
+  return new TorusGeometry(r, tube + RIM, 8, segs + 4, arc + 2 * d).rotateZ(-d)
+}
+
 const lambertOf = (g: Group) => (g.children[0] as Mesh).material as MeshLambertMaterial
 
 /** Builds the character (ported from prototype v12), then dresses it: hair style and outfit layers. */
@@ -77,7 +83,7 @@ export function buildCharacter(look: Look): Rig {
     fragmentShader: 'void main(){ gl_FragColor = vec4(0.0,0.0,0.0,1.0); }',
   })
   const kit = createKit(outline)
-  const { part, flat } = kit
+  const { part, feature } = kit
   const hoodiePaint: MeshLambertMaterial[] = []
   const hoodiePart = (g: Group) => (hoodiePaint.push(lambertOf(g)), g)
   const hairPaint: MeshBasicMaterial[] = []
@@ -126,7 +132,7 @@ export function buildCharacter(look: Look): Rig {
   }
 
   for (const s of [-1, 1]) {
-    const brow = at(hairFlat(flat(new CapsuleGeometry(0.03, 0.2, 4, 8), hairColor)), s * 0.3, 0.27, 0.74)
+    const brow = at(hairFlat(feature('brow', new CapsuleGeometry(0.03, 0.2, 4, 8), new CapsuleGeometry(0.03 + RIM, 0.2, 4, 8), hairColor)), s * 0.3, 0.27, 0.74)
     brow.rotation.z = Math.PI / 2 + s * 0.12
     brow.rotation.y = s * 0.35
     face.add(brow)
@@ -135,32 +141,38 @@ export function buildCharacter(look: Look): Rig {
   const eyesOpen = new Group()
   face.add(eyesSmile, eyesOpen)
   for (const s of [-1, 1]) {
-    const arc = at(flat(new TorusGeometry(0.11, 0.03, 8, 16, Math.PI)), s * 0.3, 0.04, 0.77)
+    const arc = at(feature('eye', new TorusGeometry(0.11, 0.03, 8, 16, Math.PI), arcRim(0.11, 0.03, 16, Math.PI)), s * 0.3, 0.04, 0.77)
     arc.rotation.y = s * 0.35
     eyesSmile.add(arc)
-    const dot = at(flat(new SphereGeometry(0.075, 12, 10)), s * 0.3, 0.06, 0.74)
-    dot.scale.set(0.8, 1.1, 0.5)
+    // rim radius grown so the margin is ≥ RIM after the dot's x/y squash
+    const dot = at(feature('eye', new SphereGeometry(0.075, 12, 10), new SphereGeometry(0.075 + RIM / 0.8, 12, 10), undefined, [0.8, 1.1, 0.5]), s * 0.3, 0.06, 0.74)
     eyesOpen.add(dot)
   }
   eyesOpen.visible = false
   const nose = at(part(new SphereGeometry(0.11, 16, 12), skin, { outline: false }), 0, -0.13, 0.8)
   nose.scale.set(1, 0.9, 0.8)
   face.add(nose)
-  const noseShadow = at(flat(new CapsuleGeometry(0.018, 0.07, 4, 8)), 0.03, -0.2, 0.83)
+  const noseShadow = at(feature('nose', new CapsuleGeometry(0.018, 0.07, 4, 8), null), 0.03, -0.2, 0.83)
   noseShadow.rotation.z = Math.PI / 2
   face.add(noseShadow)
   for (const s of [-1, 1]) {
-    const m = at(hairFlat(flat(new CapsuleGeometry(0.022, 0.15, 4, 8), hairColor)), s * 0.1, -0.26, 0.79)
+    const m = at(hairFlat(feature('moustache', new CapsuleGeometry(0.022, 0.15, 4, 8), null, hairColor)), s * 0.1, -0.26, 0.79)
     m.rotation.z = Math.PI / 2 - s * 0.28
     face.add(m)
   }
   const stubble = at(kit.lit(new SphereGeometry(0.45, 24, 16), STUBBLE), 0, -0.56, 0.46)
   stubble.scale.set(1, 0.55, 0.5)
   face.add(stubble)
-  const mouthSmile = at(flat(new TorusGeometry(0.17, 0.028, 8, 18, Math.PI)), 0, -0.36, 0.74)
+  const mouthSmile = at(feature('mouth', new TorusGeometry(0.17, 0.028, 8, 18, Math.PI), arcRim(0.17, 0.028, 18, Math.PI)), 0, -0.36, 0.74)
   mouthSmile.rotation.z = Math.PI
   face.add(mouthSmile)
-  const mouthOpen = at(flat(new CircleGeometry(0.17, 20, Math.PI, Math.PI)), 0, -0.38, 0.745)
+  // open mouth: a half disc; its rim is a bigger half disc moved up, so it also edges the flat top
+  const mouthOpen = at(
+    feature('mouth', new CircleGeometry(0.17, 20, Math.PI, Math.PI), new CircleGeometry(0.17 + 2 * RIM, 20, Math.PI, Math.PI).translate(0, RIM, 0)),
+    0,
+    -0.38,
+    0.745,
+  )
   mouthOpen.visible = false
   face.add(mouthOpen)
 
@@ -169,14 +181,14 @@ export function buildCharacter(look: Look): Rig {
     const specs = new Group()
     specs.name = 'glasses'
     for (const s of [-1, 1]) {
-      const rim = at(flat(new TorusGeometry(0.17, 0.028, 8, 28)), s * 0.3, 0.05, 0.8)
-      rim.rotation.y = s * 0.35
-      specs.add(rim)
-      const arm = at(flat(new BoxGeometry(0.03, 0.03, 0.62)), s * 0.74, 0.08, 0.38)
+      const lens = at(feature('lens', new TorusGeometry(0.17, 0.028, 8, 28), new TorusGeometry(0.17, 0.028 + RIM, 8, 28)), s * 0.3, 0.05, 0.8)
+      lens.rotation.y = s * 0.35
+      specs.add(lens)
+      const arm = at(feature('temple', new BoxGeometry(0.03, 0.03, 0.62), null), s * 0.74, 0.08, 0.38)
       arm.rotation.y = s * 0.18
       specs.add(arm)
     }
-    const bridge = at(flat(new CapsuleGeometry(0.022, 0.12, 4, 8)), 0, 0.09, 0.86)
+    const bridge = at(feature('bridge', new CapsuleGeometry(0.022, 0.12, 4, 8), new CapsuleGeometry(0.022 + RIM, 0.12, 4, 8)), 0, 0.09, 0.86)
     bridge.rotation.z = Math.PI / 2
     specs.add(bridge)
     face.add(specs)

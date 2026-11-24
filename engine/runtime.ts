@@ -8,6 +8,7 @@ import { applyPose, copyPose } from './pose-rig'
 import { DURATION, hasPose, poseFor, type PoseKind } from './poses'
 import { QUIPS } from './quips'
 import { createDitherPass } from './render/dither'
+import { LIGHTS } from './render/tone'
 import { silhouette } from './silhouette'
 import type { EngineAPI, Gesture, OutfitId, Placement, PlacementKind, PlaceInfo } from './types'
 
@@ -53,11 +54,11 @@ export function createEngine(): EngineAPI {
   const scene = new Scene()
   const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 6000)
   camera.position.set(0, 0, 3000)
-  const ambient = new AmbientLight(0xffffff, 0.45)
-  const key = new DirectionalLight(0xffffff, 3.0)
-  key.position.set(-3, 4, 5)
-  const fill = new DirectionalLight(0xffffff, 0.4)
-  fill.position.set(4, -1, 3)
+  const ambient = new AmbientLight(0xffffff, LIGHTS.ambient)
+  const key = new DirectionalLight(0xffffff, LIGHTS.key.intensity)
+  key.position.set(...LIGHTS.key.dir)
+  const fill = new DirectionalLight(0xffffff, LIGHTS.fill.intensity)
+  fill.position.set(...LIGHTS.fill.dir)
   scene.add(ambient, key, fill)
 
   let base: Look['base'] = { ...DEFAULT_LOOK.base }
@@ -70,6 +71,8 @@ export function createEngine(): EngineAPI {
   let P: Record<PlacementKind, Placement> = computePlacements(1, 1)
   let sections: Section[] = []
   let topsDirty = false
+  /** the dress-up stage area (window px), when a section is a stage */
+  let stageRect: StageRect | undefined
 
   // placement + choreography
   let shown: PlacementState | null = null
@@ -142,12 +145,12 @@ export function createEngine(): EngineAPI {
   function relayout() {
     const mobile = W <= 900
     let copyBottom: number | undefined
-    let stage: StageRect | undefined
+    stageRect = undefined
     for (const s of sections) {
       if (s.kind !== 'stage') continue
       // the area kept free for him (dress-up: [data-stage]; else the section itself), in window px
       const r = (s.el.querySelector('[data-stage]') ?? s.el).getBoundingClientRect()
-      stage = { left: r.left, top: r.top, right: r.right, bottom: Math.min(H, r.bottom) }
+      stageRect = { left: r.left, top: r.top, right: r.right, bottom: Math.min(H, r.bottom) }
     }
     if (mobile) {
       for (const s of sections) {
@@ -156,7 +159,7 @@ export function createEngine(): EngineAPI {
         if (copy) copyBottom = Math.max(copyBottom ?? 0, copy.getBoundingClientRect().bottom - s.el.getBoundingClientRect().top)
       }
     }
-    P = computePlacements(W, H, { copyBottom, stage })
+    P = computePlacements(W, H, { copyBottom, stage: stageRect })
     for (const s of sections) s.top = s.el.getBoundingClientRect().top + window.scrollY
     topsDirty = false
     // Case pages reserve a gutter of 0.85 × hero S × 3.5 (spec §6.6).
@@ -201,15 +204,17 @@ export function createEngine(): EngineAPI {
     const left = badge ? W / 2 + p.cx! - p.d! / 2 : W / 2 + p.x - REST_HALF * p.S
     const right = badge ? W / 2 + p.cx! + p.d! / 2 : W / 2 + p.x + REST_HALF * p.S
     const lift = p.floor === undefined ? 0 : Math.max(0, H / 2 + p.floor)
+    const area: [number, number] = kind === 'stage' && stageRect ? [stageRect.left, stageRect.right] : [0, W]
     if (
       place &&
       place.kind === kind &&
       Math.abs(place.left - left) < 1 &&
       Math.abs(place.right - right) < 1 &&
-      Math.abs(place.lift - lift) < 1
+      Math.abs(place.lift - lift) < 1 &&
+      Math.abs(place.area[1] - area[1]) < 1
     )
       return
-    place = { kind, left, right, lift, W, H }
+    place = { kind, left, right, lift, area, W, H }
     places.forEach((cb) => cb(place!))
   }
 

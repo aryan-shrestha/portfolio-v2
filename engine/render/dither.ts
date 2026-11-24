@@ -10,6 +10,7 @@ import {
   WebGLRenderTarget,
 } from 'three'
 import type { Camera, WebGLRenderer } from 'three'
+import { TONE, glsl } from './tone'
 
 const hexVec = (h: string) => new Vector3(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255)
 
@@ -60,7 +61,7 @@ export function createDitherPass(renderer: WebGLRenderer) {
       if (gl_FragCoord.y < floorY) discard;
       // vanish: a coarser ordered pattern than the shading, so he dissolves in blocks, not into ink
       if (bayer4(floor(gl_FragCoord.xy / 2.0)) >= fade) discard;
-      float l = clamp((pow(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 1.0 / 2.2) - 0.03) * 1.35 + flash, 0.0, 1.0);
+      float l = clamp((pow(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 1.0 / ${glsl(TONE.gamma)}) - ${glsl(TONE.lift)}) * ${glsl(TONE.gain)} + flash, 0.0, 1.0);
       bool rope = c.a < 0.75;
       float th = bayer4(gl_FragCoord.xy);
       vec3 a = rope ? accent : ink; float lv = rope ? clamp(l * 0.75 - 0.12, 0.0, 1.0) : l;

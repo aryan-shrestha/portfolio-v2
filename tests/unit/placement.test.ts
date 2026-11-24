@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BOX,
   STAGE_CUT,
+  STAGE_PAD,
   WIDEST_TOTAL,
   computePlacements,
   placementAt,
@@ -41,7 +42,8 @@ describe('computePlacements desktop 1440x900', () => {
   })
   it('stage (no area given): centred in the window, fits the widest pose and the height down to STAGE_CUT', () => {
     expect(P.stage.x).toBe(0)
-    expect(P.stage.S).toBeCloseTo(Math.min((1440 - 48) / WIDEST_TOTAL, (900 - 48) / (BOX.y1 - STAGE_CUT)), 9)
+    expect(P.stage.S).toBeCloseTo(Math.min((1440 - 32) / WIDEST_TOTAL, (900 - 16) / (BOX.y1 - STAGE_CUT)), 9)
+    expect(STAGE_PAD).toBe(16)
     expect(P.stage.floor).toBe(-450)
     expect(P.stage.y + STAGE_CUT * P.stage.S).toBeCloseTo(-450, 9) // STAGE_CUT sits on the floor
   })
@@ -49,15 +51,15 @@ describe('computePlacements desktop 1440x900', () => {
     const area = { left: 0, top: 220, right: 1000, bottom: 900 }
     const Q = computePlacements(1440, 900, { stage: area })
     expect(Q.stage.x).toBeCloseTo(500 - 720, 9)
-    expect(Q.stage.S).toBeCloseTo(Math.min((1000 - 48) / WIDEST_TOTAL, (680 - 48) / (BOX.y1 - STAGE_CUT)), 9)
+    expect(Q.stage.S).toBeCloseTo(Math.min((1000 - 32) / WIDEST_TOTAL, (680 - 16) / (BOX.y1 - STAGE_CUT)), 9)
     const top = 450 - (Q.stage.y + BOX.y1 * Q.stage.S) // CSS px from the window top
-    expect(top).toBeGreaterThanOrEqual(220 + 48 - 1e-9)
+    expect(top).toBeGreaterThanOrEqual(220 + 16 - 1e-9)
     // phones: a band at the top of the window; his floor is the band's bottom
     const R = computePlacements(390, 844, { stage: { left: 0, top: 80, right: 390, bottom: 420 } })
     expect(R.stage.floor).toBe(422 - 420)
     expect(R.stage.x).toBeCloseTo(0, 9)
-    expect(R.stage.S).toBeCloseTo(Math.min((390 - 48) / WIDEST_TOTAL, (340 - 48) / (BOX.y1 - STAGE_CUT)), 9)
-    expect((R.stage.S * WIDEST_TOTAL) / 2).toBeLessThanOrEqual(195 - 24 + 1e-9) // widest pose clears both edges
+    expect(R.stage.S).toBeCloseTo(Math.min((390 - 32) / WIDEST_TOTAL, (340 - 16) / (BOX.y1 - STAGE_CUT)), 9)
+    expect((R.stage.S * WIDEST_TOTAL) / 2).toBeLessThanOrEqual(195 - 16 + 1e-9) // widest pose clears both edges
   })
 })
 
