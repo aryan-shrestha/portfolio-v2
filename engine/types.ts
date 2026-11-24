@@ -1,4 +1,5 @@
 export type OutfitId = 'hoodie' | 'blazer-bowtie' | 'hardhat' | 'detective'
+export type HairStyle = 'wavy-fringe' | 'short-crop' | 'curly-top' | 'buzz'
 export type Gesture = 'wave' | 'point' | 'thumbs' | 'think' | 'cheer'
 
 export type PlacementKind = 'hero' | 'outro' | 'left' | 'right' | 'badge' | 'stage'
