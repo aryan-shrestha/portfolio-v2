@@ -117,6 +117,8 @@ export function createEngine(): EngineAPI {
   /** tests: read the canvas edge dots back after each drawn frame */
   let probe = false
   let edge: [number, number, number] = [0, 0, 0]
+  /** this frame: the badge's clip circle alone keeps him inside the padded window (ruling R20) */
+  let clipIn = false
   let greeting: string = QUIPS.hero
 
   // motion
@@ -273,11 +275,35 @@ export function createEngine(): EngineAPI {
     return r.st
   }
 
-  /** Containment on the final pose (spec §7.5.1): shift him inward off the left, right and top edges. */
-  function contain(S: number) {
+  /** Containment margin (CSS px) off the left, right and top edges at scale S. */
+  const padFor = (S: number) => 0.06 * S + 2 * PX
+
+  /**
+   * Ruling R20 (spec §7.5.1): how far (CSS px) the badge's clip circle (window centre, y up) sits inside the
+   * padded window on its left, right and top; ≥ 0 means nothing of him outside the window can be drawn, so
+   * containment may be skipped. While the circle is larger than that (most of the slide into or out of the
+   * badge) it hides nothing and he is contained. -Infinity without a clip.
+   */
+  const clipMargin = (c: { cx: number; cy: number; r: number } | undefined, S: number) => {
+    if (!c) return -Infinity
+    const pad = padFor(S)
+    return Math.min(W / 2 + c.cx - c.r - pad, W - pad - (W / 2 + c.cx + c.r), H / 2 - c.cy - c.r - pad)
+  }
+
+  /**
+   * Containment on the final pose (spec §7.5.1): shift him inward off the left, right and top edges.
+   * `w` < 1 (inside a badge clip that already keeps him in, R20) applies that share of the shift to this
+   * frame only, leaving the spring offset alone: the hand-over between contained and clipped never jumps.
+   */
+  function contain(S: number, w = 1) {
     const root = rig!.root
     silhouette(root, sil)
-    const { dx, dy } = containShift({ minX: sil.min.x, maxX: sil.max.x, maxY: sil.max.y }, W, H, 0.06 * S + 2 * PX)
+    const { dx, dy } = containShift({ minX: sil.min.x, maxX: sil.max.x, maxY: sil.max.y }, W, H, padFor(S))
+    if (w < 1) {
+      root.position.x += w * dx
+      root.position.y += w * dy
+      return
+    }
     if (dx) {
       offset.x += dx
       root.position.x += dx
@@ -420,12 +446,14 @@ export function createEngine(): EngineAPI {
       r.root.position.set(p.x, p.y, 0)
       const pose = poseFor(action ?? 'idle', action ? KEY_T[action] : 0, { now: 0, toward: p.x > 1 ? -1 : 1, vx: 0 })
       applyPose(r, pose, Infinity) // held: straight to the pose, no swing
-      if (kind !== 'badge') contain(p.S)
-      r.root.updateMatrixWorld(true)
       const badge = kind === 'badge' && p.d !== undefined ? { cx: p.cx ?? 0, cy: p.cy ?? 0, d: p.d } : null
+      // the same circle clips the canvas frame and still.png (placeStill)
+      const clip = badge ? { cx: badge.cx, cy: badge.cy, r: badge.d / 2 - 3 } : undefined
+      clipIn = shown && clipMargin(clip, p.S) >= 0
+      if (!clipIn) contain(p.S)
+      r.root.updateMatrixWorld(true)
       if (renderer && dither) {
         if (frame) {
-          const clip = badge ? { cx: badge.cx, cy: badge.cy, r: badge.d / 2 - 3 } : undefined
           dither.render(scene, camera, { px: PX, clip, floor: p.floor, fade: pose.visible ?? 1, flash: 0 })
           probeEdges(0)
         } else {
@@ -528,17 +556,28 @@ export function createEngine(): EngineAPI {
       blink: blinkAt < 0,
     })
 
-    // Containment on this frame's final pose (spec §7.5.1), not while he is the badge.
-    if (st.b <= 0.01) contain(st.S)
-    root.updateMatrixWorld(true)
-
-    // Badge: white disc with a vermilion ring; the clip closes in as he shrinks.
+    // Badge: the clip circle closes in as he shrinks (radius from the window diagonal down to the disc).
     const d = st.d ?? 0
     const cx = st.cx ?? 0
     const cy = st.cy ?? 0
     const inBadge = st.b > 0.001 && st.d !== undefined
-    placeBadge(inBadge && st.b > 0.6 ? (st.b - 0.6) / 0.4 : 0, cx, cy, d)
     const clip = inBadge ? { cx, cy, r: lerp(Math.hypot(W, H), d / 2 - 3, st.b) } : undefined
+    // Containment on this frame's final pose (spec §7.5.1), skipped only once the clip circle alone
+    // keeps him inside the window (ruling R20); a large circle hides nothing, so he is contained.
+    const margin = clipMargin(clip, st.S)
+    clipIn = margin >= 0
+    if (!clipIn) contain(st.S)
+    else {
+      // Hand-over: from the full shift where the circle first fits (margin 0) down to none at the badge
+      // itself, by how far the circle has closed in, so he never jumps when containment switches.
+      const atBadge = clipMargin({ cx, cy, r: d / 2 - 3 }, st.S)
+      const w = atBadge > 0 ? 1 - clamp(margin / atBadge, 0, 1) : 0
+      if (w > 0) contain(st.S, w)
+    }
+    root.updateMatrixWorld(true)
+
+    // White disc with a vermilion ring behind him.
+    placeBadge(inBadge && st.b > 0.6 ? (st.b - 0.6) / 0.4 : 0, cx, cy, d)
     placeHandle(inBadge && st.b > 0.5 ? { cx, cy, d } : null, true)
     placeBubble(now, st.talk, kind, true)
 
@@ -707,7 +746,14 @@ export function createEngine(): EngineAPI {
     debugState() {
       const a = action === 'idle' || action === 'drag' ? null : action
       const geometries = renderer?.info.memory.geometries ?? 0
-      const common = { placement: kindNow(), action: a, geometries, view, edge: [...edge] as [number, number, number] }
+      const common = {
+        placement: kindNow(),
+        action: a,
+        geometries,
+        view,
+        edge: [...edge] as [number, number, number],
+        clipContained: clipIn,
+      }
       if (!rig) return { minX: 0, maxX: 0, top: 0, S: 0, outfit: wornOutfit(), ...common }
       silhouette(rig.root, sil)
       return {

@@ -3,7 +3,8 @@ import { expectInside, startSampling, stopSampling } from './sampling'
 
 /**
  * Scroll tour (spec §6.1, §10b): 5 viewports × 31 evenly spaced scroll positions over the whole home
- * page. At each: he is inside the window (silhouette and rendered dots) unless he is the badge, at
+ * page. At each: no rendered dot on the left, right or top edge, and his silhouette inside the window
+ * unless the badge's clip circle alone keeps him inside (ruling R20), at
  * most one narration line is on, and his placement is the one of the section in view (p > 0.5 into
  * section k). Over the tour the sections come in order: hero → left → left → right → left → badge → outro.
  */
@@ -14,6 +15,7 @@ type Debug = {
   placement: string
   action: string | null
   edge: [number, number, number]
+  clipContained: boolean
 }
 type EngineWindow = Window & { __engine?: { debugState(): Debug; debugProbe(on: boolean): void } }
 
@@ -71,11 +73,12 @@ for (const vp of [
       const view = await sectionInView(page)
       const d = await debug(page)
       expect(d.placement, `${at}: placement`).toBe(view.place)
-      if (d.placement !== 'badge') {
+      expect(d.edge, `${at}: rendered dots on the [left, right, top] edge`).toEqual([0, 0, 0])
+      // ruling R20: only while the badge's clip circle alone keeps him inside may his silhouette cross
+      if (!d.clipContained) {
         expect(d.minX, `${at}: left`).toBeGreaterThanOrEqual(0)
         expect(d.maxX, `${at}: right`).toBeLessThanOrEqual(W)
         expect(d.top, `${at}: top`).toBeGreaterThanOrEqual(0)
-        expect(d.edge, `${at}: rendered dots on the [left, right, top] edge`).toEqual([0, 0, 0])
       }
       expect(await page.locator('.line.on').count(), `${at}: lines on`).toBeLessThanOrEqual(1)
       if (visited.at(-1) !== view.index) visited.push(view.index)

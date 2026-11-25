@@ -16,6 +16,8 @@ export type Sample = [
   edgeT: number,
   action: string | null,
   placement: string,
+  /** the badge's clip circle alone keeps him inside the padded window (ruling R20): silhouette exempt */
+  clip: boolean,
 ]
 type Debug = {
   minX: number
@@ -24,6 +26,7 @@ type Debug = {
   action: string | null
   placement: string
   edge: [number, number, number]
+  clipContained?: boolean
 }
 type SamplerWindow = Window & {
   __engine?: { debugState(): Debug; debugProbe(on: boolean): void; play(a: string): void }
@@ -40,7 +43,7 @@ export const startSampling = (page: Page) =>
     const loop = () => {
       if (!w.__sampling) return
       const d = w.__engine!.debugState()
-      w.__samples!.push([d.minX, d.maxX, d.top, d.edge[0], d.edge[1], d.edge[2], d.action, d.placement])
+      w.__samples!.push([d.minX, d.maxX, d.top, d.edge[0], d.edge[1], d.edge[2], d.action, d.placement, !!d.clipContained])
       requestAnimationFrame(loop)
     }
     requestAnimationFrame(loop)
@@ -81,17 +84,19 @@ export async function playSampled(page: Page, action: string, timeout = 60_000):
 }
 
 /**
- * Every sampled frame keeps him off the left, right and top edge (spec §7.5): the silhouette inside
- * [0, W] × [0, ∞) and no rendered dot in the edge column/row. Badge frames are exempt (circular clip).
+ * Every sampled frame keeps him off the left, right and top edge (spec §7.5): no rendered dot in the
+ * edge column/row, on every frame; and the silhouette inside [0, W] × [0, ∞), except on frames where the
+ * badge's clip circle alone keeps him inside the window (ruling R20: nothing outside the circle is drawn).
  */
 export function expectInside(label: string, samples: Sample[], W: number, minFrames = 4) {
   expect(samples.length, `${label}: frames sampled`).toBeGreaterThanOrEqual(minFrames)
-  samples.forEach(([minX, maxX, top, l, r, t, , placement], i) => {
-    if (placement === 'badge') return
-    expect(minX, `${label} frame ${i} left`).toBeGreaterThanOrEqual(0)
-    expect(maxX, `${label} frame ${i} right`).toBeLessThanOrEqual(W)
-    expect(top, `${label} frame ${i} top`).toBeGreaterThanOrEqual(0)
-    expect([l, r, t], `${label} frame ${i}: rendered dots on the [left, right, top] edge`).toEqual([0, 0, 0])
+  samples.forEach(([minX, maxX, top, l, r, t, action, placement, clip], i) => {
+    const at = `${label} frame ${i} (${placement}, ${action ?? 'idle'})`
+    expect([l, r, t], `${at}: rendered dots on the [left, right, top] edge`).toEqual([0, 0, 0])
+    if (clip) return
+    expect(minX, `${at} left`).toBeGreaterThanOrEqual(0)
+    expect(maxX, `${at} right`).toBeLessThanOrEqual(W)
+    expect(top, `${at} top`).toBeGreaterThanOrEqual(0)
   })
 }
 

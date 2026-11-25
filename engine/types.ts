@@ -57,6 +57,12 @@ export type DebugState = {
    */
   view: 'live' | 'image' | 'frame' | 'hidden'
   /**
+   * The badge's clip circle alone keeps him inside the padded window this frame (ruling R20, spec §7.5.1):
+   * containment is skipped and nothing of him outside the circle is drawn, so his silhouette may cross an
+   * edge. False whenever containment ran.
+   */
+  clipContained: boolean
+  /**
    * With debugProbe on: opaque dots of the last drawn canvas frame in the leftmost column, the column
    * holding the window's last pixel, and the top row. [0, 0, 0] otherwise (and on camera-flash frames,
    * which light the whole window on purpose).
