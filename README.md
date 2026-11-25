@@ -8,7 +8,7 @@ plain Three.js (no React Three Fiber). README version 1.0, 2026-11-25.
 |---|---|
 | Spec (binding) | [`docs/superpowers/specs/2026-11-25-portfolio-design.md`](docs/superpowers/specs/2026-11-25-portfolio-design.md), v1.1. Its Changelog lists every ruling that changed it |
 | Implementation plan | [`docs/superpowers/plans/2026-11-25-portfolio.md`](docs/superpowers/plans/2026-11-25-portfolio.md) |
-| Build rulings and notes | `.superpowers/sdd/2026-11-25-portfolio/progress.md` (R1–R17, N1–N14) and `constraints.md`; task briefs and reports sit beside them. `.superpowers/` is git-ignored: it lives in the working copy only |
+| Build rulings and notes | `.superpowers/sdd/2026-11-25-portfolio/progress.md` (R1–R20, N1–N15) and `constraints.md`; task briefs and reports sit beside them. `.superpowers/` is git-ignored: it lives in the working copy only |
 | Approved prototypes | `.superpowers/brainstorm/25275-1795541050/content/character-prototype-v10.html`, `scroll-tour-v12.html` |
 
 ## Run
@@ -44,7 +44,8 @@ lsof -ti :3100 | xargs kill
 ```
 
 What the suites cover (spec §10): clip regression at 7 viewports, sampled every frame (`clip.spec`,
-`actions.spec`, `tests/e2e/sampling.ts`); the scroll tour (`tour.spec`); reduced-motion and no-WebGL
+`actions.spec`, `tests/e2e/sampling.ts`); the slide into and out of the badge, per frame (`boundary.spec`,
+ruling R20); the scroll tour (`tour.spec`); reduced-motion and no-WebGL
 fallbacks (`fallbacks.spec`); dress-up (`dressup.spec`); case pages (`work.spec`); the JS budget
 (`budget.spec`: app-owned initial JS ≤ 30 KB gz, total ≤ 160 KB gz, engine ≤ 220 KB gz).
 

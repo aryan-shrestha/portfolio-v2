@@ -319,7 +319,7 @@ Build rulings that changed spec text (ledger: `.superpowers/sdd/2026-11-25-portf
 | R17 | Reduced motion with WebGL: one canvas frame of the visitor's look; `still.png` only without WebGL | §7.8 | The visitor's pick applies everywhere (§7.6); a single frame is still "static". |
 | R12 | Drag spring k = 60, c = 11 (ζ ≈ 0.71), not critically damped | §7.3 | It is the owner-approved prototype feel; at most one small overshoot. |
 | (T11) | Glasses are a dress-up option, not part of Aryan's default look | §7.1 | "Tried and removed" read as "never available"; the default look stays without them. |
-| T13 | Phones: he steps aside so the "Play with me" button stands beside him | §6.1, §7.6 | A centred phone placement left no room, and the button sat over his sleeve. Made at the finish; for owner review. |
-| T13 | Phones: the hero cap also keeps the greeting bubble clear of the copy | §6.1 | At 320 × 568 the bubble covered the sub-line. Binds only below ~360 px wide. Made at the finish; for owner review. |
+| R18 | Phones: he steps aside so the "Play with me" button stands beside him | §6.1, §7.6 | A centred phone placement left no room, and the button sat over his sleeve. Made at the finish; for owner review. |
+| R18 | Phones: the hero cap also keeps the greeting bubble clear of the copy | §6.1 | At 320 × 568 the bubble covered the sub-line. Binds only below ~360 px wide. Made at the finish; for owner review. |
 | R20 | Containment "skipped while he is the badge" → skipped only once the badge clip alone keeps him inside the window; the shift fades out between that point and the badge | §7.5.1 | The clamp was off from the first tenth of the slide into or out of the badge while the clip circle (≈ 900 px radius halfway) still hid nothing: he crossed the left edge by up to 54 px during the automatic cheer and wave, menu actions and drags. |
 
