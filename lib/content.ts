@@ -27,14 +27,22 @@ const WORK_DIR = path.join(process.cwd(), 'content', 'work')
 
 const ORDER = ['napa-valley-weddings', 'bevlytics', 'data-to-insights']
 
-export function parseWorkMeta(data: unknown): WorkMeta {
-  return workMetaSchema.parse(data)
+/**
+ * Validates frontmatter (a missing or invalid field fails the build). With `fileSlug` (the file name
+ * without `.mdx`) the frontmatter `slug` must equal it, so a route never serves another project's data.
+ */
+export function parseWorkMeta(data: unknown, fileSlug?: string): WorkMeta {
+  const meta = workMetaSchema.parse(data)
+  if (fileSlug !== undefined && meta.slug !== fileSlug) {
+    throw new Error(`content/work: frontmatter slug "${meta.slug}" does not match the file name "${fileSlug}.mdx"`)
+  }
+  return meta
 }
 
 export async function getWork(slug: string): Promise<{ meta: WorkMeta; source: string }> {
   const raw = await fs.readFile(path.join(WORK_DIR, `${slug}.mdx`), 'utf8')
   const { data, content } = matter(raw)
-  return { meta: parseWorkMeta(data), source: content }
+  return { meta: parseWorkMeta(data, slug), source: content }
 }
 
 export async function getAllWork(): Promise<WorkMeta[]> {

@@ -28,8 +28,19 @@ const ROWS = [6, 4, 3, 2] as const
 const PILL_CLEARANCE = 62
 const REACTION_MS = 3000
 
-/** Where the button and menu sit: on the bottom edge, beside his resting silhouette, on the room side. */
-type Anchor = { side: 'left' | 'right'; offset: number; badge: boolean; lift: number; shown: boolean }
+/**
+ * Where the button and menu sit: on the bottom edge, beside his resting silhouette, on the room side.
+ * As the badge, `disc` is the badge circle (left edge and diameter, CSS px): the button becomes a
+ * keyboard-only control laid exactly over it, so it never covers page text.
+ */
+type Anchor = {
+  side: 'left' | 'right'
+  offset: number
+  badge: boolean
+  lift: number
+  shown: boolean
+  disc?: { left: number; size: number }
+}
 
 /** Gap to his silhouette and to the window edge (CSS px). */
 const gapFor = (W: number) => (W <= 900 ? 16 : 24)
@@ -44,12 +55,13 @@ function anchorFor(p: PlaceInfo, buttonW: number): Anchor {
   // He stands right of the area's centre (or centred): the button goes on his left, else on his right.
   // Phones: where a centred place leaves no room, the engine steps him left so it fits on his right
   // (engine/placement `aside`).
-  const corner = { side: 'right' as const, offset: p.W - a1 + gap, badge, lift, shown }
+  const disc = badge ? { left: p.left, size: p.right - p.left } : undefined
+  const corner = { side: 'right' as const, offset: p.W - a1 + gap, badge, lift, shown, disc }
   if ((p.left + p.right) / 2 >= (a0 + a1) / 2) {
     // last resort (no room either side): the area's corner on his right
     return p.left - gap - buttonW >= a0 + gap ? { ...corner, offset: p.W - p.left + gap } : corner
   }
-  return a1 - p.right - gap - buttonW >= gap ? { side: 'left', offset: p.right + gap, badge, lift, shown } : corner
+  return a1 - p.right - gap - buttonW >= gap ? { side: 'left', offset: p.right + gap, badge, lift, shown, disc } : corner
 }
 
 /**
@@ -71,11 +83,13 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
   const menuId = useId()
   const titleId = useId()
 
-  // Follow his resting place; the pill's width is fixed by its label, measured when he moves.
+  // Follow his resting place; the pill's width is fixed by its label, measured when he moves (not as the badge disc).
   useEffect(
     () =>
       engine.onPlace((p) => {
-        pillW.current = buttonRef.current?.offsetWidth || pillW.current || 140
+        const b = buttonRef.current
+        const measured = b && !b.classList.contains('char-play-badge') ? b.offsetWidth : 0
+        pillW.current = measured || pillW.current || 140
         setAnchor(anchorFor(p, pillW.current))
       }),
     [engine],
@@ -183,6 +197,7 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
   }
 
   const badge = anchor?.badge ?? false
+  const disc = anchor?.disc
   const away = anchor ? !anchor.shown : false
   const pos = (extraBottom: number): CSSProperties | undefined =>
     anchor
@@ -194,10 +209,16 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
       <button
         ref={buttonRef}
         type="button"
-        className={`${pillClass} char-play`}
+        // As the badge: a keyboard stop laid over the badge disc (presses go through to him: a poke opens
+        // the menu, a drag carries him), so keyboard users keep the menu on case pages and in All work.
+        className={disc ? 'char-play char-play-badge' : `${pillClass} char-play`}
         // laid out but unseen until he has a place, so its width can be measured
-        style={pos(0) ?? { visibility: 'hidden' }}
-        hidden={badge || away}
+        style={
+          disc
+            ? { left: `${disc.left}px`, bottom: 'var(--char-edge)', width: `${disc.size}px`, height: `${disc.size}px` }
+            : (pos(0) ?? { visibility: 'hidden' })
+        }
+        hidden={(badge && !disc) || away}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -206,7 +227,7 @@ export function ActionMenu({ engine }: { engine: EngineAPI }) {
           setOpen((o) => !o)
         }}
       >
-        Play with me
+        {disc ? <span className="sr-only">Play with me</span> : 'Play with me'}
       </button>
       {open && anchor ? (
         <div

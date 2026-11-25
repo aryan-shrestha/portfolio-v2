@@ -24,6 +24,11 @@ describe('parseWorkMeta', () => {
     expect(() => parseWorkMeta(rest)).toThrow()
   })
 
+  it('rejects a frontmatter slug that differs from the file name', () => {
+    expect(() => parseWorkMeta(valid, 'other')).toThrow(/slug "t" does not match the file name "other.mdx"/)
+    expect(parseWorkMeta(valid, 't').slug).toBe('t')
+  })
+
   it('accepts an object without images, diagram, outcomes', () => {
     const meta = parseWorkMeta(valid)
     expect(meta.images).toBeUndefined()

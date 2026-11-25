@@ -152,7 +152,7 @@ for (const vp of [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ]) {
-  test(`"Play with me" never covers page text (${vp.width}×${vp.height}) and hides at the badge`, async ({ page }) => {
+  test(`"Play with me" never covers page text (${vp.width}×${vp.height}) and sits on the badge as a keyboard stop`, async ({ page }) => {
     await page.setViewportSize(vp)
     await page.goto('/')
     await engineReady(page)
@@ -174,10 +174,17 @@ for (const vp of [
     await page.waitForTimeout(500)
     await clear(page.locator('#contact :is(h2, p, a, span, button)'))
 
-    // All work: he is the badge, so the button goes away
+    // All work: he is the badge, so the pill becomes an unseen keyboard stop over the badge disc (never
+    // over page text); a pill that had focus keeps it, rather than dropping it on <body>
+    await play.focus()
     await page.evaluate(() => document.getElementById('work')!.scrollIntoView())
     await expect.poll(async () => (await debug(page)).placement).toBe('badge')
-    await expect(play).toBeHidden()
+    await expect(play).toBeFocused()
+    await expect(play).toHaveClass(/char-play-badge/)
+    await expect.poll(() => page.locator('[data-char="badge"]').evaluate((b) => getComputedStyle(b).opacity)).toBe('1')
+    const disc = (await page.locator('[data-char="badge"]').boundingBox())!
+    const stop = (await play.boundingBox())!
+    for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(stop[k] - disc[k]), k).toBeLessThanOrEqual(1)
   })
 }
 

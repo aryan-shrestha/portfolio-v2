@@ -97,6 +97,30 @@ test.describe.configure({ mode: 'parallel' })
 test.describe('reduced motion', () => {
   test.use({ reducedMotion: 'reduce' })
 
+  test('WebGL context lost and restored: the one still frame is drawn again', async ({ page }) => {
+    const errors = trackErrors(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/')
+    await engineReady(page)
+    await expectFrame(page)
+    // the extension is fetched while the context is alive (a lost context hands out none) and kept
+    type LoseWindow = Window & { __lose?: WEBGL_lose_context }
+    const lose = (restore: boolean) =>
+      page.evaluate((restore) => {
+        const w = window as LoseWindow
+        const c = document.querySelector<HTMLCanvasElement>('canvas[data-char="canvas"]')!
+        w.__lose ??= c.getContext('webgl2')!.getExtension('WEBGL_lose_context')!
+        if (restore) w.__lose.restoreContext()
+        else w.__lose.loseContext()
+      }, restore)
+    await lose(false)
+    await frames(page, 5)
+    await lose(true)
+    await frames(page, 10)
+    expect(await hisPixels(await himOnly(page)), 'he is drawn again after the restore').toBeGreaterThan(1500)
+    expect(errors()).toEqual([])
+  })
+
   for (const vp of [
     { width: 1440, height: 900 },
     { width: 390, height: 844 },
@@ -144,8 +168,12 @@ test.describe('reduced motion', () => {
       const badge = (await page.locator('[data-char="badge"]').boundingBox())!
       expect(badge.width).toBe(vp.width > 900 ? 160 : 112)
       expect(await page.locator('[data-char="badge"]').evaluate((b) => getComputedStyle(b).opacity)).toBe('1')
-      // no "Play with me" at the badge (a poke on the badge opens the menu)
-      await expect(page.getByRole('button', { name: 'Play with me' })).toBeHidden()
+      // no "Play with me" pill at the badge (a poke on the badge opens the menu); only the unseen
+      // keyboard stop laid over the disc
+      const play = page.getByRole('button', { name: 'Play with me' })
+      await expect(play).toHaveClass(/char-play-badge/)
+      const stop = (await play.boundingBox())!
+      for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(stop[k] - badge[k]), k).toBeLessThanOrEqual(1)
 
       // Contact: the outro still
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))

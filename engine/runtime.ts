@@ -114,6 +114,9 @@ export function createEngine(): EngineAPI {
   let stillKey = ''
   /** bumps on every rebuild of the rig (a look change), so still mode redraws */
   let rigVersion = 0
+  /** between webglcontextlost and webglcontextrestored: nothing can be drawn */
+  let contextLost = false
+  let frameErrorLogged = false
   /** tests: read the canvas edge dots back after each drawn frame */
   let probe = false
   let edge: [number, number, number] = [0, 0, 0]
@@ -472,8 +475,19 @@ export function createEngine(): EngineAPI {
     placeBubble(now, shown ? p.talk : 0, kind, shown)
   }
 
+  /** The loop: the next frame is booked first, and a throwing frame never stops it (logged once, in dev). */
   function tick() {
     raf = requestAnimationFrame(tick)
+    if (contextLost) return
+    try {
+      frame()
+    } catch (err) {
+      if (!frameErrorLogged && process.env.NODE_ENV !== 'production') console.error('[character] frame failed', err)
+      frameErrorLogged = true
+    }
+  }
+
+  function frame() {
     if (!rig || !els) return
     const now = clock()
     // Real elapsed time (spring sub-stepped) so slow frames don't slow him down; capped for tab returns.
@@ -608,6 +622,16 @@ export function createEngine(): EngineAPI {
     pointer.y = e.clientY
   }
   const onVisibility = () => (document.hidden ? halt() : run())
+  // A lost context may come back only if the default is prevented (three.js does too, and rebuilds its GL
+  // state on restore); the engine pauses drawing meanwhile and on restore redraws: still mode has one frame.
+  const onContextLost = (e: Event) => {
+    e.preventDefault()
+    contextLost = true
+  }
+  const onContextRestored = () => {
+    contextLost = false
+    stillKey = ''
+  }
   const motionQuery = typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
   const onMotion = () => {
     reduced = !!motionQuery?.matches
@@ -677,6 +701,8 @@ export function createEngine(): EngineAPI {
       window.addEventListener('pointermove', onPointer, { passive: true })
       document.addEventListener('visibilitychange', onVisibility)
       motionQuery?.addEventListener('change', onMotion)
+      canvas.addEventListener('webglcontextlost', onContextLost)
+      canvas.addEventListener('webglcontextrestored', onContextRestored)
       handle.addEventListener('pointerdown', onDown)
       handle.addEventListener('pointermove', onMove)
       handle.addEventListener('pointerup', onUp)
@@ -799,7 +825,9 @@ export function createEngine(): EngineAPI {
       motionQuery?.removeEventListener('change', onMotion)
       ro?.disconnect()
       if (els) {
-        const { handle, bubble, badge } = els
+        const { canvas, handle, bubble, badge } = els
+        canvas.removeEventListener('webglcontextlost', onContextLost)
+        canvas.removeEventListener('webglcontextrestored', onContextRestored)
         handle.removeEventListener('pointerdown', onDown)
         handle.removeEventListener('pointermove', onMove)
         handle.removeEventListener('pointerup', onUp)

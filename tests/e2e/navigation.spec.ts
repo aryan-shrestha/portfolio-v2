@@ -74,6 +74,34 @@ test('case page: he comments, then shrinks to the badge on the first scroll', as
   expect(errors()).toEqual([])
 })
 
+test('case page: once he is the badge, Tab reaches "Play with me" on the badge and it opens the menu', async ({ page }) => {
+  const errors = trackErrors(page)
+  await page.goto('/work/bevlytics')
+  await engineReady(page)
+  await expect.poll(() => placement(page), { timeout: 6000 }).toBe('badge')
+  await expect.poll(() => page.locator('[data-char="badge"]').evaluate((b) => getComputedStyle(b).opacity)).toBe('1')
+  const play = page.getByRole('button', { name: 'Play with me' })
+  let reached = false
+  for (let i = 0; i < 80 && !reached; i++) {
+    await page.keyboard.press('Tab')
+    reached = await play.evaluate((el) => el === document.activeElement)
+  }
+  expect(reached, 'Tab reaches the control').toBe(true)
+  // it sits exactly on the badge disc (never over the case text) and shows a focus ring
+  const disc = (await page.locator('[data-char="badge"]').boundingBox())!
+  const stop = (await play.boundingBox())!
+  for (const k of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(stop[k] - disc[k]), k).toBeLessThanOrEqual(1)
+  expect(await play.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid')
+  await page.keyboard.press('Enter')
+  const menu = page.getByRole('menu', { name: 'Make me do a thing' })
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole('menuitem').first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(menu).toBeHidden()
+  await expect(play).toBeFocused()
+  expect(errors()).toEqual([])
+})
+
 test('case page: without scrolling he becomes the badge after 4 s; the next case page starts over', async ({ page }) => {
   await page.goto('/work/napa-valley-weddings')
   await engineReady(page)

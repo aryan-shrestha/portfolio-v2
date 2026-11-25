@@ -251,6 +251,18 @@ body {
   position: fixed;
   z-index: 33;
 }
+/* As the badge: an unseen keyboard stop over the disc; presses reach the grab handle beneath. */
+.char-play-badge {
+  border-radius: 50%;
+  background: none;
+  border: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.char-play-badge:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 4px;
+}
 .char-menu {
   position: fixed;
   z-index: 40;
