@@ -2,7 +2,7 @@ import type { Gesture, OutfitId } from '@/engine/types'
 
 export type Screen =
   | { kind: 'image'; src: string; alt: string }
-  | { kind: 'diagram'; id: 'napa' | 'bevlytics' | 'bevlytics-cloudwatch' }
+  | { kind: 'diagram'; id: 'napa' | 'bevlytics' | 'bevlytics-cloudwatch' | 'dti' | 'dti-tenant' }
 
 export type ChapterData = {
   slug: string
@@ -98,22 +98,14 @@ export const chapters: ChapterData[] = [
         },
       },
       {
-        html: '<b>NestJS and Postgres</b> behind, <b>React and TanStack</b> in front.',
+        html: '<b>React and TanStack</b> in front, <b>NestJS</b> connectors to Snowflake and Google Drive behind.',
         gesture: 'point',
-        screen: {
-          kind: 'image',
-          src: '/work/dti-actions.webp',
-          alt: 'Data to Insights Actions screen',
-        },
+        screen: { kind: 'diagram', id: 'dti' },
       },
       {
-        html: '<b>Zod</b> checks the data at every door.',
+        html: 'I built the <b>tenant isolation</b>: Postgres RLS and a tenant unit of work.',
         gesture: 'think',
-        screen: {
-          kind: 'image',
-          src: '/work/dti-chat.webp',
-          alt: 'Data to Insights Chat screen',
-        },
+        screen: { kind: 'diagram', id: 'dti-tenant' },
       },
     ],
   },

@@ -1,4 +1,4 @@
-import type { Action, Gesture } from './types'
+import type { Action, Emote, Gesture } from './types'
 
 /** Target pose for one frame; the runtime damps the rig toward it. Angles in radians. */
 export type Pose = {
@@ -34,7 +34,7 @@ export type Pose = {
   laptop?: number
 }
 
-export type PoseKind = 'idle' | 'drag' | Action | Gesture
+export type PoseKind = 'idle' | 'drag' | Action | Gesture | Emote
 
 export type PoseCtx = {
   /** seconds since load: drives the idle bob and the drag flail */
@@ -46,7 +46,7 @@ export type PoseCtx = {
 }
 
 /** Seconds each timed pose plays before he returns to idle (spec §7.4: 1.5–4 s). */
-export const DURATION: Record<Action | Gesture, number> = {
+export const DURATION: Record<Action | Gesture | Emote, number> = {
   wave: 2.2,
   dance: 4,
   panic: 2.6,
@@ -63,6 +63,10 @@ export const DURATION: Record<Action | Gesture, number> = {
   point: 2.2,
   thumbs: 1.8,
   cheer: 2.4,
+  // idle routines: sleep is one 4 s breath-and-nod cycle, replayed while he naps
+  yawn: 2.8,
+  sleep: 4,
+  wake: 1.4,
 }
 
 /**
@@ -70,7 +74,7 @@ export const DURATION: Record<Action | Gesture, number> = {
  * moment of each action that reads best on its own (a raised wave, the peek, the CHOO, mid-typing);
  * vanish holds half-dissolved so there is still something of him to see.
  */
-export const KEY_T: Record<Action | Gesture, number> = {
+export const KEY_T: Record<Action | Gesture | Emote, number> = {
   wave: 0.6,
   dance: 0.17,
   panic: 0.5,
@@ -87,6 +91,9 @@ export const KEY_T: Record<Action | Gesture, number> = {
   point: 1,
   thumbs: 0.9,
   cheer: 1,
+  yawn: 1.4,
+  sleep: 1,
+  wake: 0.3,
 }
 
 export const hasPose = (k: string): k is PoseKind => k === 'idle' || k === 'drag' || Object.hasOwn(DURATION, k)
@@ -319,6 +326,41 @@ export function poseFor(kind: PoseKind, t: number, ctx: PoseCtx): Pose {
       p.bodyY += 0.015 * typing * k + 0.15 * party * Math.abs(Math.sin(t * 8))
       p.wide = typing > 0.5
       p.open = party > 0.5
+      break
+    }
+    case 'yawn': {
+      // Stretches both arms up, head back, a big open-mouthed yawn with his eyes squeezed shut.
+      const s = hold(t, 0.2, 0.9, 1.9, 2.6)
+      // arms as high as the cheer's (2.6): a full overhead stretch, no wider than his widest poses
+      p.sh = [-0.14 - 2.46 * s, 0.14 + 2.46 * s]
+      p.el = [-0.5 * s, 0.5 * s]
+      p.headX = -0.16 * s
+      p.bodyY += 0.04 * s
+      p.open = s > 0.3
+      p.shut = s > 0.15
+      break
+    }
+    case 'sleep': {
+      // Asleep on his feet: eyes shut, head drooped and tilted, slow breathing, one nod per cycle.
+      // Periodic over DURATION.sleep (4 s), so replays join up without a jump.
+      const breath = Math.sin((t / 4) * Math.PI * 2)
+      p.bodyY = 0.035 * breath
+      p.headX = 0.3 + 0.12 * spike(t, 2.3, 0.9)
+      p.headZ = 0.2 + 0.03 * breath
+      p.sh = [-0.06, 0.06]
+      p.shut = true
+      break
+    }
+    case 'wake': {
+      // Startled awake: a hop, arms flung out, eyes wide, then settles.
+      const h = spike(t, 0.05, 0.5)
+      const flare = hold(t, 0, 0.12, 0.7, 1.2)
+      p.bodyY += 0.2 * h
+      p.sh = [-0.14 - 0.85 * flare, 0.14 + 0.85 * flare]
+      p.el = [-0.35 * flare, 0.35 * flare]
+      p.headZ = 0.06 * Math.sin(t * 18) * flare
+      p.wide = t < 1.0
+      p.open = t < 0.8
       break
     }
     case 'drag': {

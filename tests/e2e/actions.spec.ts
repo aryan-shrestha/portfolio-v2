@@ -150,6 +150,7 @@ test('every action plays and stays inside the window (left, right, top)', async 
 
 for (const vp of [
   { width: 1440, height: 900 },
+  { width: 1024, height: 768 },
   { width: 390, height: 844 },
 ]) {
   test(`"Play with me" never covers page text (${vp.width}×${vp.height}) and sits on the badge as a keyboard stop`, async ({ page }) => {
@@ -158,12 +159,16 @@ for (const vp of [
     await engineReady(page)
     const play = page.getByRole('button', { name: 'Play with me' })
     await expect(play).toBeVisible()
+    const dress = page.locator('a.char-play')
     const clear = async (texts: Locator) => {
-      const b = (await play.boundingBox())!
-      for (const el of await texts.all()) {
-        if (!(await el.isVisible())) continue
-        const t = (await el.boundingBox())!
-        expect(overlaps(b, t), `covers "${(await el.textContent())?.slice(0, 30)}"`).toBe(false)
+      // both pills: "Play with me" and "Dress me up" beside it
+      for (const pill of [play, dress]) {
+        const b = (await pill.boundingBox())!
+        for (const el of await texts.all()) {
+          if (!(await el.isVisible())) continue
+          const t = (await el.boundingBox())!
+          expect(overlaps(b, t), `covers "${(await el.textContent())?.slice(0, 30)}"`).toBe(false)
+        }
       }
     }
     await page.waitForTimeout(500)
@@ -174,10 +179,10 @@ for (const vp of [
     await page.waitForTimeout(500)
     await clear(page.locator('#contact :is(h2, p, a, span, button)'))
 
-    // All work: he is the badge, so the pill becomes an unseen keyboard stop over the badge disc (never
+    // Experience: he is the badge, so the pill becomes an unseen keyboard stop over the badge disc (never
     // over page text); a pill that had focus keeps it, rather than dropping it on <body>
     await play.focus()
-    await page.evaluate(() => document.getElementById('work')!.scrollIntoView())
+    await page.evaluate(() => document.getElementById('experience')!.scrollIntoView())
     await expect.poll(async () => (await debug(page)).placement).toBe('badge')
     await expect(play).toBeFocused()
     await expect(play).toHaveClass(/char-play-badge/)

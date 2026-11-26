@@ -3,6 +3,8 @@ import type { Look } from './look'
 export type OutfitId = 'hoodie' | 'blazer-bowtie' | 'hardhat' | 'detective'
 export type HairStyle = 'wavy-fringe' | 'short-crop' | 'curly-top' | 'buzz'
 export type Gesture = 'wave' | 'point' | 'thumbs' | 'think' | 'cheer'
+/** Idle routines (engine/idle.ts): never in the menu, the engine plays them on its own. */
+export type Emote = 'yawn' | 'sleep' | 'wake'
 
 export type PlacementKind = 'hero' | 'outro' | 'left' | 'right' | 'badge' | 'stage'
 
@@ -47,7 +49,9 @@ export type DebugState = {
   placement: PlacementKind
   /** the outfit he is wearing now (chapter or visitor, as resolved) */
   outfit: OutfitId
-  action: Action | Gesture | null
+  action: Action | Gesture | Emote | null
+  /** asleep (idle routine): he naps until any input */
+  asleep: boolean
   /** geometries alive on the GPU (leak check across look changes) */
   geometries: number
   /**
@@ -114,11 +118,15 @@ export interface EngineAPI {
    * `data-outfit`; there is no external "chapter" priority.
    */
   setOutfit(id: OutfitId): void
+  /** The action menu is open (no idle routines meanwhile). */
+  setMenuOpen(open: boolean): void
   onPoke(cb: () => void): () => void
   /** Called with his resting place now and whenever it changes (section, resize); returns unsubscribe. */
   onPlace(cb: (p: PlaceInfo) => void): () => void
   /** Screen px: silhouette left/right/top edges (exact Box3), px per model unit, and what he is doing. */
   debugState(): DebugState
+  /** Tests: restart the idle routines (engine/idle.ts) with every timing multiplied by `scale`. */
+  debugIdle(scale: number): void
   /** Tests: read the canvas's edge dots back after every drawn frame (DebugState.edge). */
   debugProbe(on: boolean): void
   /**

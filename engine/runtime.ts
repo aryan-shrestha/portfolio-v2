@@ -1,5 +1,6 @@
 import { AmbientLight, Box3, DirectionalLight, OrthographicCamera, Scene, Vector3, WebGLRenderer } from 'three'
 import { containShift } from './contain'
+import { createIdle, type IdleEvent } from './idle'
 import { DEFAULT_LOOK, type Look } from './look'
 import { buildCharacter, type Rig } from './model/build'
 import { applyOutfit } from './model/outfits'
@@ -8,6 +9,7 @@ import {
   computePlacements,
   placementAt,
   smootherstep,
+  widestFor,
   type PlacementState,
   type StageRect,
 } from './placement'
@@ -25,6 +27,8 @@ type Section = { el: HTMLElement; kind: PlacementKind; outfit?: OutfitId; gestur
 const KINDS = new Set<string>(['hero', 'outro', 'left', 'right', 'badge', 'stage'])
 const OUTFIT_IDS = new Set<string>(['hoodie', 'blazer-bowtie', 'hardhat', 'detective'])
 const GESTURES = new Set<string>(['wave', 'point', 'thumbs', 'think', 'cheer'])
+/** Window events that count as the visitor doing something (idle routines; pointermove is handled with the cursor). */
+const INPUTS = ['scroll', 'wheel', 'keydown', 'pointerdown', 'touchstart'] as const
 /** Seconds to glide between placements when the sections change (route change, case page → badge). */
 const BLEND = 0.6
 /** Movement under this many px is a poke, not a drag (spec §7.3). */
@@ -108,6 +112,11 @@ export function createEngine(): EngineAPI {
   let reduced = false
   let action: PoseKind | null = null
   let actionT = 0
+  // idle routines (engine/idle.ts): emotes, napping, the welcome back
+  let idle = createIdle({ now: performance.now() / 1000 })
+  /** a wake or welcome from an input or a tab return, played on the next frame */
+  let pendingIdle: IdleEvent | null = null
+  let menuOpen = false
   /** how he is shown now (DebugState.view) */
   let view: DebugState['view'] = 'live'
   /** still mode: what the last still layout was made for; it is redone only when this changes */
@@ -207,7 +216,8 @@ export function createEngine(): EngineAPI {
       }
     }
     // With WebGL the "Play with me" pill stands beside him (none in the no-WebGL still mode).
-    P = computePlacements(W, H, { copyBottom, stage: stageRect, pill: gl })
+    // The visitor's outfit sets the phone size (a prop in the fist makes his widest poses wider).
+    P = computePlacements(W, H, { copyBottom, stage: stageRect, pill: gl, widest: widestFor(visitorOutfit) })
     for (const s of sections) s.top = s.el.getBoundingClientRect().top + window.scrollY
     topsDirty = false
     // Case pages reserve a gutter of 0.85 × hero S × 3.5 (spec §6.6).
@@ -243,6 +253,18 @@ export function createEngine(): EngineAPI {
   function say(text: string, ms = 3000) {
     sayText = text || null
     sayUntil = clock() + ms / 1000
+  }
+
+  function playIdle(e: IdleEvent) {
+    if (e.kind === 'emote') start(e.pose)
+    else if (e.kind === 'doze') start('yawn')
+    else if (e.kind === 'wake') {
+      start('wake')
+      say(QUIPS.wake, 2200)
+    } else {
+      start('wave')
+      say(QUIPS.welcome, 2600)
+    }
   }
 
   /** Tells listeners where he settles (the resting silhouette of the current placement), on change only. */
@@ -420,7 +442,7 @@ export function createEngine(): EngineAPI {
 
   /**
    * Still mode (spec §7.7–7.8): reduced motion, or no WebGL. No scroll choreography and no idle motion:
-   * he stands at the hero and outro, is the badge in All work and on case pages, stands on the dress-up
+   * he stands at the hero and outro, is the badge in Experience and on case pages, stands on the dress-up
    * stage, and is absent from About and the chapters (nothing over reading text); the section in view
    * swaps him, never a glide. With WebGL (reduced motion) he is one canvas frame in the visitor's own look
    * (ruling R17, spec §7.6), redrawn only on a change; an action chosen from the menu is one frame of its
@@ -522,6 +544,19 @@ export function createEngine(): EngineAPI {
       if (g) start(g)
       lastSection = current
     }
+    // Idle routines: a wake or welcome plays at once (unless he is being carried); emotes and the
+    // doze wait until he is free. Asleep, he replays the sleep cycle with a "Zzz" until woken.
+    if (pendingIdle && !drag.active) {
+      playIdle(pendingIdle)
+      pendingIdle = null
+    } else {
+      const e = idle.tick(now, !drag.active && !menuOpen && !blendFrom && action === null)
+      if (e) playIdle(e)
+    }
+    if (idle.asleep && action === null && !drag.active) {
+      start('sleep')
+      say(QUIPS.sleep, DURATION.sleep * 1000 + 300)
+    }
     // What he wears: swapped (old layer freed) only when the resolved outfit changes.
     const worn = wornOutfit()
     if (rig.look.outfit !== worn) applyOutfit(rig, worn)
@@ -617,11 +652,26 @@ export function createEngine(): EngineAPI {
 
   // listeners
   const onResize = () => resize()
+  /** Any input resets the idle clock; if he was asleep, he wakes on the next frame. */
+  const onInput = () => {
+    const e = idle.input(clock())
+    if (e) pendingIdle = e
+  }
   const onPointer = (e: PointerEvent) => {
     pointer.x = e.clientX
     pointer.y = e.clientY
+    onInput()
   }
-  const onVisibility = () => (document.hidden ? halt() : run())
+  const onVisibility = () => {
+    if (document.hidden) {
+      idle.hidden(clock())
+      halt()
+    } else {
+      const e = idle.visible(clock())
+      if (e) pendingIdle = e
+      run()
+    }
+  }
   // A lost context may come back only if the default is prevented (three.js does too, and rebuilds its GL
   // state on restore); the engine pauses drawing meanwhile and on restore redraws: still mode has one frame.
   const onContextLost = (e: Event) => {
@@ -699,6 +749,7 @@ export function createEngine(): EngineAPI {
       resize()
       window.addEventListener('resize', onResize)
       window.addEventListener('pointermove', onPointer, { passive: true })
+      for (const t of INPUTS) window.addEventListener(t, onInput, { passive: true })
       document.addEventListener('visibilitychange', onVisibility)
       motionQuery?.addEventListener('change', onMotion)
       canvas.addEventListener('webglcontextlost', onContextLost)
@@ -755,7 +806,9 @@ export function createEngine(): EngineAPI {
       if (rig) buildRig()
     },
     setOutfit(id) {
+      const resize = widestFor(id) !== widestFor(visitorOutfit)
       visitorOutfit = id // the next frame resolves what he wears (wornOutfit)
+      if (resize && els) relayout()
     },
 
     onPoke(cb) {
@@ -769,6 +822,15 @@ export function createEngine(): EngineAPI {
       return () => void places.delete(cb)
     },
 
+    setMenuOpen(open) {
+      menuOpen = open
+    },
+
+    debugIdle(scale) {
+      idle = createIdle({ now: clock(), scale })
+      pendingIdle = null
+    },
+
     debugState() {
       const a = action === 'idle' || action === 'drag' ? null : action
       const geometries = renderer?.info.memory.geometries ?? 0
@@ -779,6 +841,7 @@ export function createEngine(): EngineAPI {
         view,
         edge: [...edge] as [number, number, number],
         clipContained: clipIn,
+        asleep: idle.asleep,
       }
       if (!rig) return { minX: 0, maxX: 0, top: 0, S: 0, outfit: wornOutfit(), ...common }
       silhouette(rig.root, sil)
@@ -821,6 +884,7 @@ export function createEngine(): EngineAPI {
       halt()
       window.removeEventListener('resize', onResize)
       window.removeEventListener('pointermove', onPointer)
+      for (const t of INPUTS) window.removeEventListener(t, onInput)
       document.removeEventListener('visibilitychange', onVisibility)
       motionQuery?.removeEventListener('change', onMotion)
       ro?.disconnect()

@@ -74,6 +74,40 @@ body {
 .bubble b {
   color: var(--hl, #c43a22); /* AA on white; accent token stays #e2462c */
 }
+/* Pointer off the bottom edge toward the character (data-tail = the side he stands on). With a
+   tail, the shadow becomes a drop-shadow so it follows the tail too. */
+.bubble[data-tail] {
+  position: relative;
+  box-shadow: none;
+  filter: drop-shadow(6px 6px 0 rgba(0, 0, 0, 0.35));
+}
+.bubble-tail {
+  position: absolute;
+  top: 100%; /* the padding box's bottom = the border's top edge: the fill hides the border there */
+  width: 44px;
+  height: 26px;
+  overflow: visible;
+}
+/* Desktop: his head sits under the bubble's inner half, so the tail leans inward to it. The path
+   leans right; scaleX(-1) leans it left. */
+.bubble[data-tail='left'] .bubble-tail {
+  left: 24%;
+}
+.bubble[data-tail='right'] .bubble-tail {
+  right: 24%;
+  transform: scaleX(-1);
+}
+/* Phones: he stands past the bubble's outer end, so the tail leans outward. */
+@media (max-width: 900px) {
+  .bubble[data-tail='left'] .bubble-tail {
+    left: 18%;
+    transform: scaleX(-1);
+  }
+  .bubble[data-tail='right'] .bubble-tail {
+    right: 18%;
+    transform: none;
+  }
+}
 
 :focus-visible {
   outline: 2px solid var(--focus, var(--accent));
@@ -130,13 +164,13 @@ body {
     opacity: 1;
     transform: none;
     transition: none;
-    position: static;
+    position: relative; /* not static: it anchors the tail */
   }
   .line {
     min-height: 0;
   }
   .line + .line {
-    margin-top: 20px;
+    margin-top: 40px; /* room for the bubble tail */
   }
   .about-word {
     opacity: 1;
@@ -250,6 +284,11 @@ body {
 .char-play {
   position: fixed;
   z-index: 33;
+}
+/* "Dress me up" as a round icon button (where the page text comes close to him); its size is inline. */
+.char-dress-compact {
+  padding: 0;
+  justify-content: center;
 }
 /* As the badge: an unseen keyboard stop over the disc; presses reach the grab handle beneath. */
 .char-play-badge {

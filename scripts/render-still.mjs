@@ -38,7 +38,8 @@ try {
   const img = await sharp(png)
     .extract({ left: shot.x, top: shot.y, width: shot.w, height: shot.h })
     .resize({ width: shot.w * SCALE, height: shot.h * SCALE, kernel: 'nearest' })
-    .png({ palette: true, colours: 4, compressionLevel: 9, effort: 10 })
+    // v1.2 colour dither: each surface has its own dot and gap colours (≈ a dozen in all), plus vermilion
+    .png({ palette: true, colours: 32, compressionLevel: 9, effort: 10 })
     .toBuffer()
   // idle must sit wholly inside the frame: the outermost rows and columns are transparent (review poses may not)
   const { data, info } = await sharp(img).ensureAlpha().raw().toBuffer({ resolveWithObject: true })

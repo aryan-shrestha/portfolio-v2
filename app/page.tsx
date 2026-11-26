@@ -1,7 +1,7 @@
 import { About } from '@/components/home/About'
-import { AllWork } from '@/components/home/AllWork'
 import { Chapter } from '@/components/home/Chapter'
 import { Contact } from '@/components/home/Contact'
+import { Experience } from '@/components/home/Experience'
 import { Hero } from '@/components/home/Hero'
 import { Narration } from '@/components/home/Narration'
 import { chapters } from '@/content/chapters'
@@ -24,7 +24,7 @@ export default function Home() {
       {chapters.map((c) => (
         <Chapter key={c.slug} chapter={c} title={title(c.slug)} />
       ))}
-      <AllWork work={work} />
+      <Experience />
       <Contact />
       <Narration />
     </main>

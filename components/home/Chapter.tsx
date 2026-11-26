@@ -84,7 +84,7 @@ export function Chapter({ chapter, title }: { chapter: ChapterData; title: strin
             data-gesture={line.gesture}
             className={`line min-h-[36svh] w-[min(34%,460px)] phone:min-h-[38svh] phone:w-[78%] ${right ? 'ml-auto phone:ml-0' : 'phone:ml-auto'}`}
           >
-            <Bubble highlight={chapter.highlight}>
+            <Bubble highlight={chapter.highlight} tail={chapter.side}>
               {/* Trusted static copy from content/chapters.ts (contains <b> only). */}
               <span dangerouslySetInnerHTML={{ __html: line.html }} />
             </Bubble>

@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferGeometry,
   CircleGeometry,
   CylinderGeometry,
@@ -19,15 +18,22 @@ export const HATTED: ReadonlySet<OutfitId> = new Set<OutfitId>(['hardhat', 'dete
 const BLAZER = '#17181c'
 const HARDHAT = '#f2c230'
 const HARDHAT_RIDGE = '#c9971c'
-const STEEL = '#9aa0a6'
 const TWEED = '#a07c52'
 const WOOD = '#b08a5a'
 const RIM = '#2a2a2e'
 const LENS = '#e8eef0'
 const INK = '#111110'
 
-/** How far a held prop leans out from the forearm (radians), so it reads against the page, not the sleeve. */
-const PROP_LEAN = 0.5
+/**
+ * Grip for a held prop (hand space: fingers point -y, the elbow is +y, the thumb on the -side x edge).
+ * The handle runs across the fist at FIST_Y, PROP_GRIP up its length from the butt end, so the butt peeks
+ * out of the little-finger side and the head comes out of the thumb side, tipped PROP_TILT toward the
+ * fingers. Z sits the handle just behind the fingers' front so they read as wrapped around it.
+ */
+const FIST_Y = -0.12
+const PROP_GRIP = 0.2
+const PROP_TILT = 0.15
+const PROP_Z = -0.02
 
 /** Shows the hair's crown, or hides it under a hat. Called after either layer changes. */
 export function fitCrown(rig: Rig): void {
@@ -72,12 +78,16 @@ type Built = { objects: Object3D[]; undo?: () => void }
 type Builder = (rig: Rig, k: Kit) => Built
 
 /**
- * Holds `prop` in hand `i` (0: his left, 1: his right): grip at the palm, the business end up toward
- * the elbow, leaning out away from his body. Arms up, it points back down past his head, so a prop
- * never raises his top or widens a pose (tests/unit/bounds.test.ts measures it).
+ * Holds `prop` (built along +y: butt at 0, head at the top) in hand `i` (0: his left, 1: his right),
+ * across the fist with the head out of the thumb side. Held across the forearm, a prop stands upright
+ * when he points and lies flat when his arm hangs, so it never widens his widest poses or raises his
+ * top (tests/unit/bounds.test.ts measures it).
  */
 function hold(rig: Rig, i: 0 | 1, prop: Group): Object3D {
-  prop.rotation.z = -rig.arms[i].side * PROP_LEAN
+  const t = rig.arms[i].side * (Math.PI / 2 + PROP_TILT)
+  prop.rotation.z = t
+  // put the prop's grip point (0, PROP_GRIP) on the fist
+  prop.position.set(Math.sin(t) * PROP_GRIP, FIST_Y - Math.cos(t) * PROP_GRIP, PROP_Z)
   rig.slots.hands[i].add(prop)
   return prop
 }
@@ -144,7 +154,7 @@ const OUTFITS: Record<OutfitId, Builder> = {
     }
   },
 
-  /** Bevlytics (spec §6.2): yellow hard hat with a ridge, and a wrench ("pipeline builder"). */
+  /** Bevlytics (spec §6.2): yellow hard hat with a ridge ("pipeline builder"). No hand prop. */
   hardhat(rig, k) {
     const hat = new Group()
     hat.name = 'hardhat'
@@ -159,16 +169,7 @@ const OUTFITS: Record<OutfitId, Builder> = {
     brim.scale.set(1, 1, 1.06)
     hat.add(brim)
     rig.slots.hat.add(hat)
-
-    const wrench = at(new Group(), 0, 0, 0.16)
-    wrench.name = 'wrench'
-    wrench.add(at(k.part(new BoxGeometry(0.15, 0.76, 0.07), STEEL), 0, 0.3, 0))
-    // open jaw, its gap facing away from the grip
-    const jaw = at(k.part(new TorusGeometry(0.18, 0.075, 8, 18, Math.PI * 1.45), STEEL), 0, 0.84, 0)
-    jaw.rotation.z = Math.PI / 2 - Math.PI * 1.725
-    wrench.add(jaw)
-    // his left hand: the one he points with on the Bevlytics side of the page
-    return { objects: [hat, hold(rig, 0, wrench)] }
+    return { objects: [hat] }
   },
 
   /** Data to Insights (spec §6.2): deerstalker with front and back peaks, and a magnifying glass. */
@@ -191,7 +192,7 @@ const OUTFITS: Record<OutfitId, Builder> = {
     hat.add(at(k.part(new SphereGeometry(0.065, 10, 8), TWEED), 0, 0.78, 0))
     rig.slots.hat.add(hat)
 
-    const glass = at(new Group(), 0, 0, 0.16)
+    const glass = new Group()
     glass.name = 'magnifier'
     glass.add(at(k.part(new CylinderGeometry(0.06, 0.07, 0.46, 10), WOOD), 0, 0.18, 0))
     glass.add(at(k.part(new TorusGeometry(0.28, 0.06, 10, 32), RIM), 0, 0.68, 0))
@@ -212,7 +213,7 @@ export function applyOutfit(rig: Rig, id: OutfitId): void {
     old.objects.forEach((o) => o.removeFromParent())
     old.kit.dispose()
   }
-  const kit = createKit(rig.outline)
+  const kit = createKit(rig.outline, rig.look.base.skin)
   const built = (OUTFITS[id] ?? OUTFITS.hoodie)(rig, kit)
   const layer: Layer = { id, kit, objects: built.objects, undo: built.undo }
   rig.layers.outfit = layer

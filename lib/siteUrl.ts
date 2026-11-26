@@ -1,6 +1,6 @@
 /**
- * The site's canonical origin (metadata, sitemap, robots). Server-only. The domain is not chosen yet
- * (spec §12): set SITE_URL (e.g. https://example.com) in the host's environment at launch. Until then a
+ * The site's canonical origin (metadata, sitemap, robots). Server-only. Production sets
+ * SITE_URL=https://shrestha-aryan.com.np in Vercel's environment once the domain resolves. Without it a
  * Vercel build uses the project's production URL and a local build uses localhost.
  */
 export const siteUrl = (

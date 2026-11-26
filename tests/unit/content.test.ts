@@ -6,7 +6,7 @@ const valid = {
   title: 'T',
   slug: 't',
   year: 2025,
-  builtAt: 'CloudProAI',
+  builtAt: 'Data to Insights AI',
   myPart: 'Part',
   stack: ['A'],
   liveUrl: 'https://example.com/',
@@ -45,10 +45,10 @@ describe('work content', () => {
       'bevlytics',
       'data-to-insights',
     ])
-    expect(all.every((w) => w.builtAt === 'CloudProAI')).toBe(true)
+    expect(all.every((w) => w.builtAt === 'Data to Insights AI')).toBe(true)
     expect(all[0].stack).toEqual(['Next.js', 'Python', 'FastAPI'])
     expect(all[1].stack).toEqual(['Python', 'AWS Lambda', 'Snowflake', 'CloudWatch'])
-    expect(all[2].stack).toEqual(['NestJS', 'React', 'PostgreSQL', 'Zod', 'TanStack'])
+    expect(all[2].stack).toEqual(['React', 'Zod', 'TanStack', 'shadcn/ui', 'NestJS', 'TypeORM', 'PostgreSQL', 'AWS SDK'])
   })
 
   it('has no outcomes on any entry', async () => {

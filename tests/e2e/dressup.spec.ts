@@ -30,11 +30,92 @@ test('footer "Dress me up" is a client navigation: same character, stage placeme
   await engineReady(page)
   await page.evaluate(() => ((window as EngineWindow).__marker = 1))
   await page.evaluate(() => document.getElementById('contact')!.scrollIntoView())
-  await page.getByRole('link', { name: 'Dress me up' }).click()
+  await page.locator('#contact footer').getByRole('link', { name: 'Dress me up' }).click()
   await expect(page).toHaveURL(/\/dress-up$/)
   await expect.poll(async () => (await debug(page)).placement).toBe('stage')
   expect(await page.evaluate(() => (window as EngineWindow).__marker)).toBe(1)
   expect(await page.evaluate(() => document.querySelectorAll('canvas').length)).toBe(1)
+})
+
+// v1.2: a "Dress me up" pill beside "Play with me" wherever the pill shows (wide screens: in a row, on
+// the far side from him; phones: stacked above it); not as the badge, and not on the dress-up page itself.
+for (const vp of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`"Dress me up" pill beside "Play with me" (${vp.width}×${vp.height}): client navigation, hidden at the badge and on the stage`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await engineReady(page)
+    await idle(page)
+    const play = page.getByRole('button', { name: 'Play with me' })
+    const dress = page.locator('a.char-play')
+    await expect(dress).toBeVisible()
+    await expect(dress).toHaveAccessibleName('Dress me up')
+    await expect(dress).toHaveAttribute('href', '/dress-up')
+    await page.waitForTimeout(500)
+    const p = (await play.boundingBox())!
+    const d = (await dress.boundingBox())!
+    const right = (b: typeof p) => b.x + b.width
+    if (vp.width > 900) {
+      // a row on the bottom edge: same baseline, a small gap, the far side from him (he is right of it)
+      expect(Math.abs(d.y - p.y)).toBeLessThanOrEqual(1)
+      expect(p.x - right(d), 'a small gap, on the far side').toBeGreaterThanOrEqual(8)
+      expect(p.x - right(d)).toBeLessThanOrEqual(16)
+    } else {
+      // stacked above it, on the same edge
+      expect(d.y + d.height, 'above the pill').toBeLessThanOrEqual(p.y)
+      expect(p.y - (d.y + d.height), 'a small gap').toBeLessThanOrEqual(16)
+      expect(Math.abs(d.x - p.x) <= 1 || Math.abs(right(d) - right(p)) <= 1).toBe(true)
+    }
+    // not over him
+    const s = await debug(page)
+    expect(d.x + d.width <= s.minX || d.x >= s.maxX, `pill ${JSON.stringify(d)} vs ${s.minX}–${s.maxX}`).toBe(true)
+    // the menu opens above both pills
+    await play.click()
+    const menu = (await page.locator('.char-menu').boundingBox())!
+    expect(menu.y + menu.height).toBeLessThanOrEqual(d.y + 1)
+    await page.keyboard.press('Escape')
+
+    // as the badge: no dress pill
+    await page.evaluate(() => document.getElementById('experience')!.scrollIntoView())
+    await expect.poll(async () => (await debug(page)).placement).toBe('badge')
+    await expect(dress).toBeHidden()
+    // back at the hero it returns; a press takes him (the same character) to his stage, where it hides
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await expect(dress).toBeVisible()
+    await page.evaluate(() => ((window as EngineWindow).__marker = 1))
+    await dress.click()
+    await expect(page).toHaveURL(/\/dress-up$/)
+    await expect.poll(async () => (await debug(page)).placement).toBe('stage')
+    expect(await page.evaluate(() => (window as EngineWindow).__marker)).toBe(1)
+    await expect(play).toBeVisible()
+    await expect(page.locator('a.char-play')).toBeHidden()
+  })
+}
+
+// Where the hero text comes close to him (1024×768), "Dress me up" is a round icon button in the row:
+// still named "Dress me up", clear of the text.
+test('"Dress me up" turns into a round icon button where a pill would cover the hero text (1024×768)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.goto('/')
+  await engineReady(page)
+  await idle(page)
+  const dress = page.locator('a.char-play')
+  await expect(dress).toHaveClass(/char-dress-compact/)
+  await expect(dress).toHaveAccessibleName('Dress me up')
+  const d = (await dress.boundingBox())!
+  expect(Math.abs(d.width - d.height)).toBeLessThanOrEqual(1)
+  const p = (await page.getByRole('button', { name: 'Play with me' }).boundingBox())!
+  expect(Math.abs(d.y - p.y)).toBeLessThanOrEqual(1)
+  // scrolled on to a chapter, there is room: the full pill again
+  await page.evaluate(() => document.querySelectorAll('section')[2].scrollIntoView())
+  await expect(dress).not.toHaveClass(/char-dress-compact/)
+  await expect(dress).toHaveText('Dress me up')
 })
 
 for (const vp of [
@@ -230,3 +311,59 @@ for (const url of ['/dress-up', '/missing'])
       }
       expect(errors().filter((e) => !e.includes('404'))).toEqual([])
     })
+
+/** Pixels in a box (fractions of his handle box) that lean toward `chan` by at least 25 over the others. */
+async function leaning(page: Page, box: { x0: number; y0: number; x1: number; y1: number }, chan: 'r' | 'b' | 'white') {
+  const { default: sharp } = await import('sharp')
+  const h = (await page.locator('[data-char="handle"]').boundingBox())!
+  const clip = {
+    x: Math.round(h.x + h.width * box.x0),
+    y: Math.round(h.y + h.height * box.y0),
+    width: Math.round(h.width * (box.x1 - box.x0)),
+    height: Math.round(h.height * (box.y1 - box.y0)),
+  }
+  const { data, info } = await sharp(await page.screenshot({ clip }))
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  let n = 0
+  for (let i = 0; i < data.length; i += info.channels) {
+    const [r, g, b] = [data[i], data[i + 1], data[i + 2]]
+    if (
+      chan === 'white'
+        ? r > 240 && g > 240 && b > 240
+        : chan === 'b'
+          ? b > r + 25 && b > g + 10
+          : r > b + 25 && r > g + 10
+    )
+      n++
+  }
+  return n / (info.width * info.height)
+}
+
+test('colour picks show on him: the hoodie and skin swatches change the colour of his dots (v1.2)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/dress-up')
+  await engineReady(page)
+  await idle(page)
+  const torso = { x0: 0.3, y0: 0.72, x1: 0.7, y1: 0.95 }
+  const face = { x0: 0.3, y0: 0.25, x1: 0.7, y1: 0.45 }
+  // his own grey hoodie: no colour cast
+  expect(await leaning(page, torso, 'b')).toBeLessThan(0.02)
+  expect(await leaning(page, torso, 'r')).toBeLessThan(0.02)
+
+  await page.getByRole('button', { name: 'Hoodie colour: navy' }).click()
+  await expect.poll(() => leaning(page, torso, 'b')).toBeGreaterThan(0.25)
+  await page.getByRole('button', { name: 'Hoodie colour: burgundy' }).click()
+  await expect.poll(() => leaning(page, torso, 'r')).toBeGreaterThan(0.25)
+
+  // skin: the face is tinted warm, more so for a darker tone
+  const light = await leaning(page, face, 'r')
+  await page.getByRole('button', { name: 'Skin tone: medium-dark' }).click()
+  await expect.poll(() => leaning(page, face, 'r')).toBeGreaterThan(Math.max(0.3, light + 0.1))
+  // the rims behind eyes and mouth take the skin's tint: no white halos on dark skin
+  await page.getByRole('button', { name: 'Skin tone: dark' }).click()
+  await page.getByRole('button', { name: 'Round glasses' }).click()
+  await expect.poll(() => leaning(page, face, 'white')).toBeLessThan(0.03)
+})

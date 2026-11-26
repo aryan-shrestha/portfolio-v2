@@ -19,6 +19,10 @@ export const QUIPS = {
   mobile: 'Ooh, phone size. I can squeeze in.',
   /** hero greeting for a returning visitor (wired in Task 12) */
   returning: "Oh hi, you're <b>back</b>. Same tour, fresh coffee.",
+  /** idle routines (engine/idle.ts): napping, woken up, back on the tab */
+  sleep: 'Zzz…',
+  wake: "I'm up! I'm up.",
+  welcome: "Oh, you're <b>back</b>!",
 } as const
 
 /** What he says as he plays each action from the menu (spec §7.4). */

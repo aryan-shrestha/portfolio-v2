@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next'
 import { Bricolage_Grotesque, DM_Mono, Instrument_Sans } from 'next/font/google'
 import { CharacterLayer } from '@/components/character/CharacterLayer'
+import { SmoothScroll } from '@/components/SmoothScroll'
 import { ogImage, siteUrl } from '@/lib/siteUrl'
+import 'lenis/dist/lenis.css'
 import './globals.css'
 
 // Font pairing (spec 4.2, builder's call): Instrument Sans body + DM Mono mono.
@@ -42,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <body className="min-h-full flex flex-col">
         {children}
         <CharacterLayer />
+        <SmoothScroll />
       </body>
     </html>
   )

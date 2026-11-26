@@ -50,6 +50,7 @@ export function DressUp({
       </div>
       <section
         aria-labelledby="dressup-controls"
+        data-lenis-prevent
         className="relative px-(--m) pt-6 pb-[max(var(--m),env(safe-area-inset-bottom))] wide:overflow-y-auto wide:py-[clamp(16px,3svh,40px)] wide:pl-0"
       >
         <div className="rounded-2xl border-2 border-ink bg-white p-[clamp(20px,1.8vw,26px)] shadow-[6px_6px_0_rgba(0,0,0,0.35)]">

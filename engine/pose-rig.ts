@@ -59,7 +59,7 @@ export function applyPose(rig: Rig, pose: Pose, dt: number, look: LookInput = NO
   showProp(props.phone[0], pose.phone?.[0] ?? 0, dt)
   showProp(props.phone[1], pose.phone?.[1] ?? 0, dt)
   showProp(props.laptop, pose.laptop ?? 0, dt)
-  // An outfit's hand prop (wrench, magnifier) steps aside while that hand holds the phone or types.
+  // An outfit's hand prop (the magnifier) steps aside while that hand holds the phone or types.
   rig.slots.hands.forEach((h, i) => showProp(h, 1 - Math.max(pose.phone?.[i] ?? 0, pose.laptop ?? 0), dt))
 }
 

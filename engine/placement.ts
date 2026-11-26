@@ -1,4 +1,4 @@
-import type { Placement, PlacementKind } from './types'
+import type { OutfitId, Placement, PlacementKind } from './types'
 
 export type { Placement, PlacementKind }
 
@@ -22,6 +22,16 @@ export type StageRect = { left: number; top: number; right: number; bottom: numb
  * to it. tests/unit/poses.test.ts re-measures every pose and fails if one gets wider.
  */
 export const WIDEST_TOTAL = 6.35
+/**
+ * The same measure for the outfit that holds a prop in the fist (the deerstalker's magnifier): its head
+ * pokes out of the thumb side, which faces out when his arms go up and out (cheer, panic, drag).
+ * Measured 6.51, so 6.65 by the WIDEST_TOTAL rule. Only a visitor who picks that look gets the smaller
+ * phone size; tests/unit/bounds.test.ts measures both.
+ */
+export const WIDEST_HELD = 6.65
+const HOLDS_PROP: ReadonlySet<OutfitId> = new Set<OutfitId>(['detective'])
+/** The width phones size him to for a look wearing `outfit`. */
+export const widestFor = (outfit: OutfitId): number => (HOLDS_PROP.has(outfit) ? WIDEST_HELD : WIDEST_TOTAL)
 /** Half the idle silhouette width, model units (spec §7.5.2): where his sides are at rest, facing out. */
 export const REST_HALF = 1.74
 /**
@@ -59,15 +69,16 @@ export function aside(c: number, S: number, a0: number, a1: number, W: number, p
 export function computePlacements(
   W: number,
   H: number,
-  opts: { copyBottom?: number; stage?: StageRect; pill?: boolean } = {},
+  opts: { copyBottom?: number; stage?: StageRect; pill?: boolean; widest?: number } = {},
 ): Record<PlacementKind, Placement> {
+  const widest = opts.widest ?? WIDEST_TOTAL
   const mobile = W <= 900
   const m = Math.max(16, W * 0.03)
   const cut = mobile ? -1.5 : -1.2 // model y that sits on the bottom edge
   const height = BOX.y1 - cut
 
   let Sh = mobile
-    ? Math.min((H * 0.42) / height, (W - 24) / WIDEST_TOTAL)
+    ? Math.min((H * 0.42) / height, (W - 24) / widest)
     : Math.min((H * 0.86) / height, (W * 0.42) / (BOX.x1 - BOX.x0))
   const Ss = Sh * (mobile ? 0.62 : 0.85)
   // Phones: silhouette top (H - height*S from the top edge), and the greeting bubble just above it,
@@ -91,7 +102,7 @@ export function computePlacements(
   const r = opts.stage ?? { left: 0, top: 0, right: W, bottom: H }
   const Sst = Math.max(
     0,
-    Math.min((r.right - r.left - 2 * STAGE_PAD) / WIDEST_TOTAL, (r.bottom - r.top - STAGE_PAD) / (BOX.y1 - STAGE_CUT)),
+    Math.min((r.right - r.left - 2 * STAGE_PAD) / widest, (r.bottom - r.top - STAGE_PAD) / (BOX.y1 - STAGE_CUT)),
   )
   const floor = H / 2 - r.bottom
   const stageC = (r.left + r.right) / 2

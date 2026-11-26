@@ -25,7 +25,7 @@ Environment:
 
 | Variable | Use |
 |---|---|
-| `SITE_URL` | Canonical origin for metadata, `sitemap.xml` and `robots.txt`, e.g. `https://example.com`. The domain is still open (spec §12). Unset: a Vercel build uses `VERCEL_PROJECT_PRODUCTION_URL`, a local build `http://localhost:3000` |
+| `SITE_URL` | Canonical origin for metadata, `sitemap.xml` and `robots.txt`, in production `https://shrestha-aryan.com.np`. Unset: a Vercel build uses `VERCEL_PROJECT_PRODUCTION_URL`, a local build `http://localhost:3000` |
 | `NEXT_PUBLIC_E2E=1` | Exposes `window.__engine` (debug hooks) for Playwright and the render scripts. Never set it for the live site |
 
 ## Test
@@ -91,7 +91,7 @@ npm run og                             # scripts/render-og.mjs: public/og.png, a
    Add the cover name to `covers` in `tests/unit/images.test.ts`.
 2. **Case study.** Create `content/work/<slug>.mdx` with the required frontmatter: `title, slug, year,
    builtAt, myPart, stack, liveUrl, tint, highlight, heroImage, problem, built` (optional: `images`,
-   `diagram`, `outcomes`). Facts only, from the owner. Note `builtAt` is `z.literal('CloudProAI')` in
+   `diagram`, `outcomes`). Facts only, from the owner. Note `builtAt` is `z.literal('Data to Insights AI')` in
    `lib/content.ts`: a project built elsewhere needs that schema widened first.
 3. **Wiring.** Add the slug to `ORDER` in `lib/content.ts`; its cover to `COVERS` in
    `components/home/AllWork.tsx`; the screenshot sizes to `SIZES` in `components/work/CaseStudy.tsx`; a
@@ -104,5 +104,31 @@ npm run og                             # scripts/render-og.mjs: public/og.png, a
 
 ## Deploy
 
-Not deployed. Hosting is Vercel (spec §10); the domain and the go-live are the owner's call. Set
-`SITE_URL` once the domain exists.
+Hosting is Vercel (spec §10), imported from GitHub (`aryan-shrestha/portfolio-v2`, public); production
+deploys from `main`. Domain: `shrestha-aryan.com.np`. No `vercel.json`: the
+project runs on Vercel's Next.js defaults, and every route is static (○ or ●).
+
+| Setting | Value |
+|---|---|
+| Framework preset | Next.js (auto-detected) |
+| Build / install / output | Defaults: `npm install`, `next build`, `.next` |
+| Node.js | 24.x, from `engines` in `package.json` |
+| Environment | Production: `SITE_URL=https://shrestha-aryan.com.np` once the domain resolves. Never `NEXT_PUBLIC_E2E` |
+
+Steps:
+
+1. Push the repo to GitHub (or GitLab/Bitbucket) and import it in Vercel. Vercel builds only what is
+   committed: generated assets (`public/og.png`, `public/character/still.png`, `public/work/*`,
+   `app/icon.png`, `app/apple-icon.png`) must be committed, because the render scripts need Playwright
+   and the source screenshots, and neither is available on Vercel.
+2. First deploy: leave `SITE_URL` unset. Metadata, `sitemap.xml` and `robots.txt` use the
+   `*.vercel.app` production URL.
+3. Domain: add `shrestha-aryan.com.np` under Project → Settings → Domains and enter the DNS records
+   Vercel shows at the `.com.np` registrar. Once it verifies, set
+   `SITE_URL=https://shrestha-aryan.com.np` for Production and redeploy. `SITE_URL` is read at build
+   time, so changing it takes a new build.
+4. Check: `/robots.txt` and `/sitemap.xml` show the right origin, and the share card renders
+   (`og:image` is absolute).
+
+Preview deployments get `VERCEL_PROJECT_PRODUCTION_URL` as well, so their canonical and OG URLs point
+at production. That is intended: previews never compete with the live site.

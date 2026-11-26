@@ -89,7 +89,7 @@ export function applyHair(rig: Rig, style: HairStyle, color: string): void {
     old.objects.forEach((o) => o.removeFromParent())
     old.kit.dispose()
   }
-  const kit = createKit(rig.outline)
+  const kit = createKit(rig.outline, rig.look.base.skin)
   const built = (STYLES[style] ?? STYLES['wavy-fringe'])(kit, color)
   built.objects.forEach((o) => rig.face.add(o))
   const layer: Layer = { id: style, kit, objects: built.objects, crown: built.crown }

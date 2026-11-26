@@ -115,3 +115,49 @@ test('case page: without scrolling he becomes the badge after 4 s; the next case
   await expect.poll(() => placement(page)).toBe('right')
   await expect(page.locator('[data-char="bubble"]')).toHaveText('The data had opinions.')
 })
+
+/**
+ * Wheel 600 px at the top of the page. scrollY is recorded on every frame in the page from just
+ * before the wheel until it settles, so slow test machines can't make it look instant or late.
+ */
+async function wheelGlide(page: import('@playwright/test').Page) {
+  await page.mouse.move(200, 200)
+  await page.evaluate(() => {
+    const w = window as unknown as { __ys: [number, number][] }
+    w.__ys = []
+    const tick = (t: number) => {
+      w.__ys.push([t, scrollY])
+      if (w.__ys.length < 240) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  await page.mouse.wheel(0, 600)
+  await expect.poll(() => page.evaluate(() => scrollY), { timeout: 3000 }).toBeGreaterThanOrEqual(595)
+  const ys = await page.evaluate(() => (window as unknown as { __ys: [number, number][] }).__ys)
+  // time from leaving the top (> 30 px) to arriving (≥ 570 px): one frame if the jump is instant
+  const left = ys.find(([, y]) => y > 30)
+  const came = ys.find(([, y]) => y >= 570)
+  const glideMs = left && came ? came[0] - left[0] : 0
+  return { glideMs, settled: await page.evaluate(() => scrollY) }
+}
+
+test('smooth scroll: a wheel step glides there over several frames and lands where it was aimed', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('html')).toHaveClass(/\blenis\b/) // smooth scroll loaded (after idle)
+  const { glideMs, settled } = await wheelGlide(page)
+  // Lenis (lerp 0.1) takes ~400 ms at 60 fps; time-based, so slow frames don't shorten it
+  expect(glideMs, 'ms spent part-way there').toBeGreaterThanOrEqual(150)
+  expect(settled).toBeLessThanOrEqual(605)
+})
+
+test('smooth scroll is off under reduced motion (native scrolling), and follows the setting live', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  await page.waitForTimeout(2500) // past the idle load
+  await expect(page.locator('html')).not.toHaveClass(/\blenis\b/)
+  await wheelGlide(page) // still scrolls, natively
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await expect(page.locator('html')).toHaveClass(/\blenis\b/)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expect(page.locator('html')).not.toHaveClass(/\blenis\b/)
+})

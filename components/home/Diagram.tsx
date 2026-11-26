@@ -1,4 +1,4 @@
-export type DiagramId = 'napa' | 'bevlytics' | 'bevlytics-cloudwatch'
+export type DiagramId = 'napa' | 'bevlytics' | 'bevlytics-cloudwatch' | 'dti' | 'dti-tenant'
 
 const LABELS: Record<DiagramId, string> = {
   napa: 'Diagram: the browser talks to a Next.js front end, which calls a Python FastAPI back end.',
@@ -6,6 +6,9 @@ const LABELS: Record<DiagramId, string> = {
     'Diagram: raw distributor data runs through an ETL job on AWS Lambda into Snowflake. CloudWatch sits beside Lambda and receives its logs.',
   'bevlytics-cloudwatch':
     'Diagram: raw distributor data runs through an ETL job on AWS Lambda into Snowflake. CloudWatch, highlighted, sits beside Lambda and receives its logs.',
+  dti: 'Diagram: a React front end calls a NestJS back end with TypeORM, which stores data in PostgreSQL with row-level security. Connectors in the back end read from Snowflake and Google Drive.',
+  'dti-tenant':
+    'Diagram: a React front end calls a NestJS back end, whose tenant unit of work and PostgreSQL row-level security, highlighted, keep each tenant to its own data. Connectors read from Snowflake and Google Drive.',
 }
 
 const INK = 'var(--ink)'
@@ -103,6 +106,37 @@ export function Diagram({ id }: { id: DiagramId }) {
             <Node x={236} y={145} w={168} h={110} label={['Next.js']} caption="front end" size={34} shade={shade} />
             <Flow x1={416} y1={200} x2={438} y2={200} />
             <Node x={448} y={145} w={168} h={110} label={['FastAPI']} caption="back end" size={34} shade={shade} />
+          </>
+        ) : id === 'dti' || id === 'dti-tenant' ? (
+          <>
+            <Node x={20} y={70} w={176} h={116} label={['React']} caption="front end" size={25} shade={shade} />
+            <Flow x1={204} y1={128} x2={224} y2={128} />
+            <Node
+              x={232}
+              y={70}
+              w={176}
+              h={116}
+              label={['NestJS']}
+              caption={id === 'dti-tenant' ? 'tenant UoW' : 'TypeORM'}
+              size={25}
+              shade={shade}
+            />
+            <Flow x1={416} y1={128} x2={436} y2={128} hl={id === 'dti-tenant'} />
+            <Node
+              x={444}
+              y={70}
+              w={176}
+              h={116}
+              label={['PostgreSQL']}
+              caption="RLS"
+              size={25}
+              shade={shade}
+              hl={id === 'dti-tenant'}
+            />
+            <Node x={128} y={262} w={176} h={96} label={['Snowflake']} caption="connector" size={25} shade={shade} />
+            <Flow x1={232} y1={254} x2={286} y2={196} />
+            <Node x={336} y={262} w={176} h={96} label={['Google Drive']} caption="connector" size={25} shade={shade} />
+            <Flow x1={408} y1={254} x2={354} y2={196} />
           </>
         ) : (
           <>

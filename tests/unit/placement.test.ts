@@ -7,11 +7,13 @@ import {
   REST_HALF,
   STAGE_CUT,
   STAGE_PAD,
+  WIDEST_HELD,
   WIDEST_TOTAL,
   computePlacements,
   placementAt,
   smootherstep,
   transitionProgress,
+  widestFor,
   type PlacementKind,
 } from '@/engine/placement'
 
@@ -183,5 +185,24 @@ describe('placementAt', () => {
     expect(r.current).toBe(0) // p must exceed 0.5
     const r2 = placementAt(scrollY + 1, H, sections, P)
     expect(r2.current).toBe(1)
+  })
+})
+
+describe('width budget by outfit', () => {
+  it('only the prop outfit (deerstalker) sizes to WIDEST_HELD; every other look keeps WIDEST_TOTAL', () => {
+    expect(widestFor('hoodie')).toBe(WIDEST_TOTAL)
+    expect(widestFor('blazer-bowtie')).toBe(WIDEST_TOTAL)
+    expect(widestFor('hardhat')).toBe(WIDEST_TOTAL)
+    expect(widestFor('detective')).toBe(WIDEST_HELD)
+  })
+
+  it('phones size the hero and the stage to the width given', () => {
+    const plain = computePlacements(390, 844)
+    const held = computePlacements(390, 844, { widest: WIDEST_HELD })
+    expect(held.hero.S).toBeCloseTo(366 / WIDEST_HELD, 9)
+    expect(held.hero.S / plain.hero.S).toBeCloseTo(WIDEST_TOTAL / WIDEST_HELD, 9)
+    const stage = { left: 0, top: 80, right: 390, bottom: 420 }
+    const R = computePlacements(390, 844, { stage, widest: WIDEST_HELD })
+    expect((R.stage.S * WIDEST_HELD) / 2).toBeLessThanOrEqual(195 - 16 + 1e-9)
   })
 })

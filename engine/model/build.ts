@@ -82,7 +82,7 @@ export function buildCharacter(look: Look): Rig {
     vertexShader: 'uniform float t; void main(){ vec3 p = position + normal * t; gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0); }',
     fragmentShader: 'void main(){ gl_FragColor = vec4(0.0,0.0,0.0,1.0); }',
   })
-  const kit = createKit(outline)
+  const kit = createKit(outline, skin)
   const { part, feature } = kit
   const hoodiePaint: MeshLambertMaterial[] = []
   const hoodiePart = (g: Group) => (hoodiePaint.push(lambertOf(g)), g)

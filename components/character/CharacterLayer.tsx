@@ -173,6 +173,9 @@ export function CharacterLayer() {
   // Test/dev hook, declared last so it appears once the listeners and sections above are in place.
   useEffect(() => {
     if (!engine || !EXPOSE) return
+    // e2e builds start with the idle routines off, so tests that watch him for 20 s+ see only what they
+    // asked for; tests/e2e/idle.spec.ts turns them on (debugIdle). Dev and production keep them.
+    if (process.env.NEXT_PUBLIC_E2E === '1') engine.debugIdle(Infinity)
     window.__engine = engine
     return () => {
       if (window.__engine === engine) delete window.__engine

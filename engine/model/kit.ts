@@ -52,13 +52,19 @@ export const at = <T extends Object3D>(o: T, x: number, y: number, z: number): T
 export const RIM = 0.06
 /** How far the rim sits in front of the feature's centre, so the skin around it never covers it. */
 const RIM_LIFT = 0.05
+/** Render-target alpha that tags rim pixels (background 0, accent 0.5, rim 0.8, everything else 1). */
+export const RIM_ALPHA = 0.8
 /** Name of a feature's rim mesh. */
 export const RIM_NAME = 'rim'
 
 /** Outline meshes are tagged so silhouette maths can skip them (same geometry, same transform). */
 export const OUTLINE = 'outline'
 
-export function createKit(outline: Material): Kit {
+/**
+ * `rimColor`: the feature rims' colour, the skin's (default white). Rims are tagged (alpha RIM_ALPHA)
+ * so the dither draws them as that colour's gap tint only, with no dots (engine/render/dither.ts).
+ */
+export function createKit(outline: Material, rimColor: string = PAPER): Kit {
   const geometries = new Set<BufferGeometry>()
   const materials = new Set<Material>()
   const track = <G extends BufferGeometry>(g: G): G => (geometries.add(g), g)
@@ -100,7 +106,7 @@ export function createKit(outline: Material): Kit {
       if (scale) ink.scale.set(...scale)
       ink.renderOrder = 2
       if (!rimGeo) return ink
-      const rim = new Mesh(track(rimGeo), (paper ??= keep(new MeshBasicMaterial({ color: PAPER, depthWrite: false }))))
+      const rim = new Mesh(track(rimGeo), (paper ??= keep(new MeshBasicMaterial({ color: rimColor, depthWrite: false, opacity: RIM_ALPHA, blending: NoBlending }))))
       rim.name = RIM_NAME
       rim.position.z = RIM_LIFT / ink.scale.z
       // opaque objects draw in renderOrder: skin and the rest (0), then rims (1), then the ink (2)

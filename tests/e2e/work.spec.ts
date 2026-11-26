@@ -30,10 +30,10 @@ const PROJECTS = [
     title: 'Data to Insights',
     year: '2026',
     myPart: 'Frontend and backend features',
-    stack: ['NestJS', 'React', 'PostgreSQL', 'Zod', 'TanStack'],
+    stack: ['React', 'Zod', 'TanStack', 'shadcn/ui', 'NestJS', 'TypeORM', 'PostgreSQL', 'AWS SDK'],
     live: 'https://www.datatoinsights.ai/',
     host: 'datatoinsights.ai',
-    diagram: null,
+    diagram: /React front end calls a NestJS back end/,
     images: ['dti-actions', 'dti-chat'],
     next: 'napa-valley-weddings',
   },
@@ -58,10 +58,10 @@ for (const p of PROJECTS) {
     await expect(root).toHaveAttribute('data-case-comment', p.slug)
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(p.title)
-    await expect(page.getByRole('link', { name: '← All work' })).toHaveAttribute('href', '/#work')
+    await expect(page.getByRole('link', { name: '← Home' })).toHaveAttribute('href', '/')
     const meta = page.getByRole('list', { name: 'Project facts' })
     await expect(meta).toContainText(p.year)
-    await expect(meta).toContainText('Built at CloudProAI')
+    await expect(meta).toContainText('Built at Data to Insights AI')
     await expect(meta).toContainText(p.myPart)
 
     await expect(page.getByRole('list', { name: 'Stack' }).getByRole('listitem')).toHaveText(p.stack)
@@ -107,11 +107,11 @@ test('an unknown slug is a 404', async ({ page }) => {
   expect(res?.status()).toBe(404)
 })
 
-test('"← All work" lands on the All work section of the home page', async ({ page }) => {
+test('"← Home" goes back to the top of the home page', async ({ page }) => {
   await page.goto('/work/bevlytics')
-  await page.getByRole('link', { name: '← All work' }).click()
-  await expect(page).toHaveURL(/\/#work$/)
-  await expect(page.locator('#work')).toBeVisible()
+  await page.getByRole('link', { name: '← Home' }).click()
+  await expect(page).toHaveURL(/:3100\/$/)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
 })
 
 for (const [width, height] of [

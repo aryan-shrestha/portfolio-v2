@@ -1,9 +1,9 @@
-import { Box3, Mesh, MeshBasicMaterial, MeshLambertMaterial, Vector3, type BufferGeometry, type Material, type Object3D } from 'three'
+import { Box3, Mesh, MeshBasicMaterial, MeshLambertMaterial, NoBlending, Vector3, type BufferGeometry, type Material, type Object3D } from 'three'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOOK, HAIR_STYLES, OUTFITS, SWATCHES, type Look } from '@/engine/look'
 import { buildCharacter, type Rig } from '@/engine/model/build'
 import { applyHair } from '@/engine/model/hair'
-import { RIM, RIM_NAME } from '@/engine/model/kit'
+import { RIM, RIM_ALPHA, RIM_NAME } from '@/engine/model/kit'
 import { applyOutfit } from '@/engine/model/outfits'
 import type { HairStyle, OutfitId } from '@/engine/types'
 
@@ -178,15 +178,40 @@ describe('outfits (spec §6.2)', () => {
     expect(rig.layers.hair!.crown!.scale.x).toBe(0)
   })
 
-  it('props go in the hand he points with in that chapter: wrench left (Bevlytics), magnifier right (DTI)', () => {
-    const wrench = buildCharacter(lookOf('wavy-fringe', 'hardhat'))
-    expect(wrench.slots.hands[0].getObjectByName('wrench')).toBeTruthy()
-    expect(wrench.slots.hands[1].children).toHaveLength(0)
+  it('only the DTI magnifier is a hand prop, in his right hand; the hard hat holds nothing', () => {
+    const hardhat = buildCharacter(lookOf('wavy-fringe', 'hardhat'))
+    expect(hardhat.slots.hands.map((h) => h.children.length)).toEqual([0, 0])
+    expect(hardhat.slots.hat.getObjectByName('hardhat')).toBeTruthy()
     const glass = buildCharacter(lookOf('wavy-fringe', 'detective'))
     expect(glass.slots.hands[1].getObjectByName('magnifier')).toBeTruthy()
     expect(glass.slots.hands[0].children).toHaveLength(0)
     expect(glass.slots.hat.getObjectByName('deerstalker')).toBeTruthy()
     expect(buildCharacter(DEFAULT_LOOK).slots.hat.children).toHaveLength(0)
+  })
+
+  it('hand props are gripped across the fist: head out of the thumb side, not up the forearm; fingers cover the handle', () => {
+    for (const [outfit, name, i] of [
+      ['detective', 'magnifier', 1],
+    ] as const) {
+      const rig = buildCharacter(lookOf('wavy-fringe', outfit))
+      rig.root.updateMatrixWorld(true)
+      const slot = rig.slots.hands[i]
+      const hand = slot.parent!
+      const side = rig.arms[i].side
+      const prop = slot.getObjectByName(name)!
+      const inHand = (o: Object3D) => hand.worldToLocal(o.getWorldPosition(new Vector3()))
+      // hand space: fingers point -y, the elbow is +y, the thumb is on the -side x edge (palm half-width 0.22)
+      const head = inHand(prop.children[1])
+      expect(head.x * -side, `${name} head out of the thumb side`).toBeGreaterThan(0.45)
+      expect(head.y, `${name} head level with the fist, not up the forearm`).toBeLessThan(0.05)
+      expect(head.y, `${name} head not past the fingertips`).toBeGreaterThan(-0.45)
+      // the handle runs through the fist: it spans the palm's centre line
+      const handle = new Box3().setFromObject(prop.children[0], true)
+      const c = hand.getWorldPosition(new Vector3())
+      expect(handle.min.x < c.x && handle.max.x > c.x, `${name} handle through the fist`).toBe(true)
+      // ...and its front stays behind the fingers' front (z 0.055), so they read as wrapped around it
+      expect(handle.max.z - c.z, `${name} handle behind the fingers`).toBeLessThanOrEqual(0.055)
+    }
   })
 
   it('rest silhouette of every hair × outfit stays within x [-1.8, 1.8]', () => {
@@ -291,7 +316,7 @@ describe('facial features carry paper rims (ruling R14)', () => {
     return m.geometry.boundingBox!.clone().applyMatrix4(m.matrixWorld)
   }
 
-  it('every ink feature has a white rim behind it, at least RIM wider on every side, drawn before the ink', () => {
+  it('every ink feature has a skin-tinted rim behind it, at least RIM wider on every side, drawn before the ink', () => {
     const rig = buildCharacter(lookOf('wavy-fringe', 'hoodie', { glasses: true, skin: '#6e4630' }))
     rig.root.updateMatrixWorld(true)
     const list = features(rig)
@@ -302,7 +327,10 @@ describe('facial features carry paper rims (ruling R14)', () => {
       const rim = ink.children.find((c) => c.name === RIM_NAME) as Mesh
       expect(rim, ink.uuid).toBeTruthy()
       const mat = rim.material as MeshBasicMaterial
-      expect(mat.color.getHexString()).toBe('ffffff')
+      // v1.2: the skin's colour, tagged so the dither draws it as the skin's gap tint (no white halos)
+      expect('#' + mat.color.getHexString()).toBe('#6e4630')
+      expect(mat.opacity).toBe(RIM_ALPHA)
+      expect(mat.blending).toBe(NoBlending)
       expect(mat.depthWrite).toBe(false)
       expect(rim.renderOrder).toBeLessThan(ink.renderOrder)
       const a = ownBox(ink)

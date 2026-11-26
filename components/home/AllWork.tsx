@@ -9,7 +9,11 @@ const COVERS: Record<string, string> = {
   'data-to-insights': '/work/cover-dti.png',
 }
 
-/** Section 6 (spec §6.4): heading, count, 3→1 column grid of 3:2 covers linking to case studies. */
+/**
+ * Section 6 (spec §6.4): heading, count, 3→1 column grid of 3:2 covers linking to case studies.
+ * Not mounted for now (owner, v1.2): re-add `<AllWork work={work} />` before `<Experience />` in
+ * app/page.tsx, and restore its tests (git history) to bring it back.
+ */
 export function AllWork({ work }: { work: WorkMeta[] }) {
   return (
     <section

@@ -58,12 +58,25 @@ describe('poseFor', () => {
     expect(poseFor('drag', 0, { ...ctx, vx: 100 }).bodyZ).toBe(-0.3)
   })
 
-  it('every action and gesture has a duration of 1.5–4 s', () => {
-    expect(Object.keys(DURATION).sort()).toEqual([...new Set([...ACTIONS, ...GESTURES])].sort())
+  it('every action, gesture and idle routine has a duration of 1.4–4 s', () => {
+    const EMOTES = ['yawn', 'sleep', 'wake']
+    expect(Object.keys(DURATION).sort()).toEqual([...new Set([...ACTIONS, ...GESTURES, ...EMOTES])].sort())
     for (const k of [...ACTIONS, ...GESTURES]) {
       expect(DURATION[k]).toBeGreaterThanOrEqual(1.5)
       expect(DURATION[k]).toBeLessThanOrEqual(4)
     }
+    // the startled wake is a quick hop (1.4 s); sleep is one 4 s cycle, replayed while he naps
+    for (const k of EMOTES) {
+      expect(DURATION[k as keyof typeof DURATION]).toBeGreaterThanOrEqual(1.4)
+      expect(DURATION[k as keyof typeof DURATION]).toBeLessThanOrEqual(4)
+    }
+  })
+
+  it('the sleep cycle joins up: its first and last frames match, so replays never jump', () => {
+    const a = poseFor('sleep', 0, { now: 0, toward: 1, vx: 0 })
+    const b = poseFor('sleep', DURATION.sleep - 1e-6, { now: 0, toward: 1, vx: 0 })
+    for (const k of ['bodyY', 'headX', 'headZ'] as const) expect(Math.abs(a[k] - b[k]), k).toBeLessThan(1e-3)
+    expect(a.shut && b.shut).toBe(true)
   })
 
   it('every action and gesture is back to idle once its duration is over', () => {

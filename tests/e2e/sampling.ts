@@ -105,12 +105,14 @@ export const widest = (samples: Sample[]) =>
   samples.reduce((best, s, i) => (s[1] - s[0] > samples[best][1] - samples[best][0] ? i : best), 0)
 
 const HIDE_PAGE_ID = 'edge-scan-hide'
+/** Not the #808080 page the scans hide everything behind: a pixel of him, whatever its colour. */
+export const notGrey = (r: number, g: number, b: number) => Math.abs(r - 128) + Math.abs(g - 128) + Math.abs(b - 128) > 30
 
 /**
  * Screenshot edge scan (R15): with everything but the character canvas hidden on a mid-grey page,
- * screenshot the window's column 0, column W−1 and row 0 and count pure-white (#ffffff), ink
- * (< 30,30,30) and vermilion pixels — anything of him an outline or dither dot drew past the Box3
- * silhouette. Returns the count per edge.
+ * screenshot the window's column 0, column W−1 and row 0 and count every pixel that is not the grey
+ * page — anything of him an outline or dither dot drew past the Box3 silhouette, in any colour (v1.2:
+ * his dots and gaps carry the visitor's colours). Returns the count per edge.
  */
 export async function screenshotEdges(page: Page): Promise<{ left: number; right: number; top: number }> {
   const [W, H] = await page.evaluate((id) => {
@@ -128,11 +130,7 @@ export async function screenshotEdges(page: Page): Promise<{ left: number; right
     const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true })
     let n = 0
     for (let i = 0; i < data.length; i += info.channels) {
-      const [r, g, b] = [data[i], data[i + 1], data[i + 2]]
-      const white = r >= 250 && g >= 250 && b >= 250
-      const ink = r < 30 && g < 30 && b < 30
-      const vermilion = Math.abs(r - 226) < 30 && Math.abs(g - 70) < 35 && Math.abs(b - 44) < 35
-      if (white || ink || vermilion) n++
+      if (notGrey(data[i], data[i + 1], data[i + 2])) n++
     }
     return n
   }

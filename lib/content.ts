@@ -7,7 +7,7 @@ const workMetaSchema = z.object({
   title: z.string().min(1),
   slug: z.string().min(1),
   year: z.number().int(),
-  builtAt: z.literal('CloudProAI'),
+  builtAt: z.literal('Data to Insights AI'),
   myPart: z.string().min(1),
   stack: z.array(z.string().min(1)).min(1),
   liveUrl: z.string().url(),
@@ -17,7 +17,7 @@ const workMetaSchema = z.object({
   problem: z.string().min(1),
   built: z.string().min(1),
   images: z.array(z.string().min(1)).optional(),
-  diagram: z.enum(['napa', 'bevlytics']).optional(),
+  diagram: z.enum(['napa', 'bevlytics', 'dti']).optional(),
   outcomes: z.string().min(1).optional(),
 })
 

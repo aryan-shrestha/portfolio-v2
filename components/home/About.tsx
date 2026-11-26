@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 const TEXT =
-  "I'm a full-stack developer based in Kathmandu. At CloudProAI I built frontends, APIs and data pipelines for client products. Now I take on freelance projects, from first sketch to a site that's live."
+  "I'm a full-stack developer in Kathmandu, now a software engineer at Maitri Services. Before that, at Data to Insights AI, I built frontends, APIs and data pipelines for client products. I take on freelance projects too, from first sketch to a site that's live."
 const HIGHLIGHT = 'frontends, APIs and data pipelines'
 
 const WORDS: { w: string; hl: boolean }[] = (() => {

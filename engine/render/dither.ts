@@ -10,7 +10,7 @@ import {
   WebGLRenderTarget,
 } from 'three'
 import type { Camera, WebGLRenderer } from 'three'
-import { TONE, glsl } from './tone'
+import { COLOUR_GLSL, TONE, glsl } from './tone'
 
 const hexVec = (h: string) => new Vector3(parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255)
 
@@ -29,7 +29,9 @@ export type DitherOpts = {
 
 /**
  * Two-pass ordered dither. The scene renders into an RGBA nearest-filtered target at W/px x H/px
- * (alpha: background 0, normal 1, accent 0.5); the post pass turns it into ink/white or vermilion/white dots.
+ * (alpha: background 0, accent 0.5, feature rim 0.8, everything else 1); the post pass turns it into
+ * coloured dots on tinted gaps (engine/render/tone.ts COLOUR: neutral colours stay ink on white),
+ * vermilion/white for the accent, and the plain gap tint (no dots) for the rims behind facial features.
  * The renderer must have an alpha-capable canvas and pixel ratio 1.
  */
 export function createDitherPass(renderer: WebGLRenderer) {
@@ -62,10 +64,15 @@ export function createDitherPass(renderer: WebGLRenderer) {
       // vanish: a coarser ordered pattern than the shading, so he dissolves in blocks, not into ink
       if (bayer4(floor(gl_FragCoord.xy / 2.0)) >= fade) discard;
       float l = clamp((pow(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 1.0 / ${glsl(TONE.gamma)}) - ${glsl(TONE.lift)}) * ${glsl(TONE.gain)} + flash, 0.0, 1.0);
-      bool rope = c.a < 0.75;
+      bool rope = c.a < 0.65;
+      bool rim = c.a < 0.92 && !rope;
       float th = bayer4(gl_FragCoord.xy);
-      vec3 a = rope ? accent : ink; float lv = rope ? clamp(l * 0.75 - 0.12, 0.0, 1.0) : l;
-      gl_FragColor = vec4(lv > th ? paper : a, 1.0);
+      float lv = rope ? clamp(l * 0.75 - 0.12, 0.0, 1.0) : l;
+      ${COLOUR_GLSL}
+      vec3 a = rope ? accent : dotC; vec3 bg = rope ? paper : gapC;
+      // rims: the skin's tint with no dots, washed out by the flash like everything else
+      if (rim) { gl_FragColor = vec4(mix(gapC, paper, flash), 1.0); return; }
+      gl_FragColor = vec4(lv > th ? bg : a, 1.0);
     }`,
   })
   const quad = new Mesh(new PlaneGeometry(2, 2), post)

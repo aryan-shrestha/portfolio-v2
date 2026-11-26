@@ -25,21 +25,89 @@ test('sections render in order with the engine contract attributes', async ({ pa
 
   await expect(sections.nth(0)).toHaveAttribute('data-gesture', 'wave')
   await expect(sections.nth(0).getByRole('heading', { level: 1 })).toHaveText('I build the whole thing.')
-  await expect(sections.nth(1)).toContainText('At CloudProAI I built frontends, APIs and data pipelines')
+  await expect(sections.nth(1)).toContainText('now a software engineer at Maitri Services')
+  await expect(sections.nth(1)).toContainText('Before that, at Data to Insights AI, I built frontends, APIs and data pipelines')
   for (let c = 0; c < 3; c++) {
     const s = sections.nth(2 + c)
     await expect(s).toHaveAttribute('data-outfit', chapters[c].outfit)
     await expect(s.getByRole('heading', { level: 2 })).toHaveText(TITLES[c])
     await expect(s.getByRole('link', { name: 'View project →' })).toHaveAttribute('href', `/work/${chapters[c].slug}`)
   }
-  await expect(sections.nth(5)).toHaveAttribute('data-gesture', 'cheer')
-  await expect(sections.nth(5).getByRole('heading', { level: 2 })).toHaveText('All work')
-  await expect(sections.nth(5)).toContainText('3 projects')
-  await expect(sections.nth(5).getByRole('link')).toHaveCount(3)
+  // All work is not on the page for now (owner); Experience follows the last chapter
+  await expect(page.locator('#work')).toHaveCount(0)
+  await expect(sections.nth(5)).toHaveAttribute('id', 'experience')
   await expect(sections.nth(6)).toHaveAttribute('id', 'contact')
   await expect(sections.nth(6)).toHaveAttribute('data-gesture', 'wave')
   await expect(sections.nth(6).getByRole('heading', { level: 2 })).toHaveText('Got a project?')
 })
+
+test('Experience lists the roles newest first, links the case studies and every credential', async ({ page }) => {
+  await page.goto('/')
+  const s = page.locator('main > section').nth(5)
+  await expect(s).toHaveAttribute('id', 'experience')
+  await expect(s).toHaveAttribute('data-place', 'badge')
+  await expect(s).toHaveAttribute('data-gesture', 'thumbs')
+  // plain paper, no grid: the grid made the small text hard to read
+  await expect(s).toHaveCSS('background-image', 'none')
+  await expect(s).toHaveCSS('background-color', 'rgb(246, 244, 238)')
+  await expect(s.getByRole('heading', { level: 2 })).toHaveText(['Experience', 'Licenses & certifications'])
+
+  const roles = s.locator('ol > li')
+  await expect(roles).toHaveCount(5)
+  await expect(roles.first().getByRole('heading', { level: 3 })).toHaveText('Maitri Services')
+  // no job titles on the site (owner's call; they stay in content/experience.ts)
+  await expect(s).not.toContainText(/Software Engineer|Python Developer|Django Developer/)
+  await expect(roles.first()).toContainText('Oct 2026 – Present')
+  await expect(roles.first().getByRole('list', { name: 'Skills' }).getByRole('listitem')).toHaveText([
+    'Python',
+    'FastAPI',
+    'Browser Automation',
+    'TypeScript',
+    'React',
+    'GCP',
+  ])
+  await expect(roles.nth(1).getByRole('heading', { level: 3 })).toHaveText('Data to Insights AI')
+  await expect(roles.nth(1).getByRole('list', { name: 'Skills' }).getByRole('listitem')).toHaveText([
+    'Python',
+    'FastAPI',
+    'TypeScript',
+    'Next.js',
+    'NestJS',
+    'PostgreSQL',
+    'AWS',
+  ])
+  // no "Built here" line: the rows hold no links (owner removed it)
+  await expect(s.locator('ol').getByRole('link')).toHaveCount(0)
+  await expect(s).not.toContainText('Built here')
+  await expect(s).not.toContainText(/roles since/) // the counter by the heading is gone (owner)
+
+  const creds = s.getByRole('link', { name: /^Show credential/ })
+  await expect(creds).toHaveCount(4)
+  for (let i = 0; i < 4; i++) {
+    await expect(creds.nth(i)).toHaveAttribute('target', '_blank')
+    await expect(creds.nth(i)).toHaveAttribute('rel', 'noopener')
+    await expect(creds.nth(i)).toHaveAttribute('href', /^https:\/\//)
+  }
+})
+
+for (const vp of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+  { width: 320, height: 568 },
+])
+  test(`Experience at ${vp.width}×${vp.height}: no horizontal overflow`, async ({ page }) => {
+    await page.setViewportSize(vp)
+    await page.goto('/')
+    await page.locator('#experience').scrollIntoViewIfNeeded()
+    const over = await page.evaluate(() => {
+      const W = document.documentElement.clientWidth
+      return [...document.querySelectorAll<HTMLElement>('#experience *')]
+        .filter((e) => e.getBoundingClientRect().right > W + 0.5)
+        .map((e) => e.tagName + ' ' + e.textContent!.slice(0, 40))
+    })
+    expect(over).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(vp.width)
+  })
 
 test('each chapter shows its three narration lines', async ({ page }) => {
   await page.goto('/')
@@ -175,7 +243,8 @@ for (const vp of [
           return `${s.opacity}|${s.position}`
         }),
       )
-      expect(styles).toEqual(['1|static', '1|static', '1|static'])
+      // not sticky (relative only anchors the tail)
+      expect(styles).toEqual(['1|relative', '1|relative', '1|relative'])
 
       // Walk through the chapter: no bubble may ever overlap the chapter title.
       const [top, height] = await section.evaluate((s) => [(s as HTMLElement).offsetTop, (s as HTMLElement).offsetHeight])

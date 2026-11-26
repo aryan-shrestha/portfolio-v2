@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import sharp from 'sharp'
+import { notGrey } from './sampling'
 
 /**
  * Fallbacks (spec §7.3, §7.7, §7.8): reduced motion, no WebGL, the returning visitor and the
@@ -71,8 +72,8 @@ async function hisPixels(png: Buffer) {
   const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true })
   let n = 0
   for (let i = 0; i < data.length; i += info.channels) {
-    const [r, g, b] = [data[i], data[i + 1], data[i + 2]]
-    if ((r >= 250 && g >= 250 && b >= 250) || (r < 30 && g < 30 && b < 30)) n++
+    // anything not the #808080 page: his dots and gaps, in any colour (v1.2 colour dither)
+    if (notGrey(data[i], data[i + 1], data[i + 2])) n++
   }
   return n
 }
@@ -161,7 +162,7 @@ test.describe('reduced motion', () => {
       // narration reads as text
       await expect(page.locator('main > section').nth(2).locator('.line .bubble').first()).toBeVisible()
 
-      // All work: the badge, one frame clipped inside its circle
+      // Experience: the badge, one frame clipped inside its circle
       await scrollToSection(page, 5)
       await expect.poll(async () => (await debug(page)).placement).toBe('badge')
       await expectFrame(page)

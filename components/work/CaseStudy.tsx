@@ -73,10 +73,10 @@ export async function CaseStudy({ meta, source, next }: { meta: WorkMeta; source
       <header className="grid-bg bg-(--tint) text-(--fg)">
         <div className={`px-(--m) pt-6 pb-[clamp(32px,7svh,72px)] ${gutter}`}>
           <Link
-            href="/#work"
+            href="/"
             className="inline-flex min-h-11 items-center font-mono text-sm underline decoration-1 underline-offset-4 hover:decoration-2"
           >
-            ← All work
+            ← Home
           </Link>
           <h1 className="display mt-[clamp(24px,6svh,64px)] text-[clamp(44px,8vw,136px)] font-extrabold">
             {meta.title}

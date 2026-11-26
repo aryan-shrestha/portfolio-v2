@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { expectInside, playSampled, startSampling, stopSampling, type Sample } from './sampling'
 
 /**
- * Badge boundaries (spec §7.5, ruling R20): parked part-way into All work (he shrinks into the badge)
+ * Badge boundaries (spec §7.5, ruling R20): parked part-way into Experience (he shrinks into the badge)
  * and into Contact (he grows out of it), every frame of the automatic gesture and of a played dance
  * keeps him off the left, right and top edge — silhouette and rendered dots — unless the badge's clip
  * circle alone keeps him inside the window.
@@ -24,9 +24,9 @@ const frames = (page: Page, n = 2) =>
     n,
   )
 
-/** Section k of the home page (main > [data-place]): 5 = All work (badge), 6 = Contact (outro). */
+/** Section k of the home page (main > [data-place]): 5 = Experience (badge), 6 = Contact (outro). */
 const BOUNDARIES = [
-  { name: 'All work', index: 5, place: 'badge', gesture: 'cheer' },
+  { name: 'Experience', index: 5, place: 'badge', gesture: 'thumbs' },
   { name: 'Contact', index: 6, place: 'outro', gesture: 'wave' },
 ] as const
 const PS = [0.3, 0.55, 0.7, 0.85]
